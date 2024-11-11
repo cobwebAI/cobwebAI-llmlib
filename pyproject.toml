@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "langchain-playground"
+version = "0.1.0"
+description = ""
+authors = ["SERGEYDJUM <39106181+SERGEYDJUM@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+langchain = "^0.3.7"
+langchain-openai = "^0.2.6"
+langchain-chroma = "^0.1.4"
+openai = "^1.54.3"
+pydub = "^0.25.1"
+
+[tool.poetry.scripts]
+audio2text = "langchain_playground.audio:pipeline"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
