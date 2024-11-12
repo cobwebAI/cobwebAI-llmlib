@@ -1,69 +1,94 @@
-from openai import NOT_GIVEN, OpenAI
-from pydub import AudioSegment
+from openai import NOT_GIVEN, AsyncOpenAI
+from asyncio import create_subprocess_exec
+from aiofiles import ospath as aio_path
+from langchain_playground.logger import log
 
-AUDIO_TARGET_BITRATE = 256
+AUDIO_TARGET_BITRATE = 128
+"""Target bitrate for audio in Kb"""
 
 OAI_AUDIO_LIMIT = 25 * 1024 * 8 * 1000 // AUDIO_TARGET_BITRATE
 """Maximum length of audio file for OpenAI API in milliseconds"""
 
+AUDIO_SEGMENT_LENGTH = int(0.95 * OAI_AUDIO_LIMIT) // 1000
+"""Seconds. Just to be safe, segments are 5% shorter than OAI_AUDIO_LIMIT"""
 
-def preprocess_audio(path: str) -> list[str]:
-    audio: AudioSegment = AudioSegment.from_file(path)
+OAI_CLIENT = AsyncOpenAI()
 
-    duration = int(audio.duration_seconds * 1000)
-    full_seg_cnt = duration // OAI_AUDIO_LIMIT
-    last_seg_dur = duration % OAI_AUDIO_LIMIT
-    seg_cnt = full_seg_cnt if last_seg_dur == 0 else full_seg_cnt + 1
 
-    segments: list[AudioSegment] = []
+async def preprocess_audio(path: str) -> list[str]:
+    log.debug(f"preprocessing audio: {path}")
+    
+    ffmpeg = await create_subprocess_exec(
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        path,
+        "-map",
+        "0:a",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        f"{AUDIO_TARGET_BITRATE}k",
+        "-f",
+        "segment",
+        "-segment_time",
+        f"{AUDIO_SEGMENT_LENGTH}",
+        "-reset_timestamps",
+        "1",
+        f"{path}_%d.ogg",
+    )
 
-    for i in range(seg_cnt):
-        segments.append(
-            audio[i * OAI_AUDIO_LIMIT : min((i + 1) * OAI_AUDIO_LIMIT, duration)]
-        )
+    exit_code = await ffmpeg.wait()
+
+    if exit_code != 0:
+        raise RuntimeError("audio segmentation: ffmpeg: nonzero status code")
 
     segment_paths: list[str] = []
 
-    for i, seg in enumerate(segments):
-        seg_path = f"{path}.{i}.mp3"
-        seg.export(seg_path, format="mp3", bitrate=f"{AUDIO_TARGET_BITRATE}K")
-        segment_paths.append(seg_path)
+    segment_idx = 0
+    segment_path = f"{path}_{segment_idx}.ogg"
+
+    while await aio_path.exists(segment_path):
+        segment_paths.append(segment_path)
+
+        segment_idx += 1
+        segment_path = f"{path}_{segment_idx}.ogg"
+
+    if len(segment_paths) == 0:
+        raise RuntimeError("audio segmentation: no segments found")
 
     return segment_paths
 
 
-def audio_to_text(paths: list[str], language: str = "ru") -> list[str]:
-    oai_client = OpenAI()
-    texts: list[str] = []
+async def audio_to_text(paths: list[str], language: str) -> list[str]:
+    text_segments: list[str] = []
 
-    with open("assets/oai.log", "w", encoding="utf-8") as log:
-        for path in paths:
-            with open(path, "rb") as audio_file:
-                prompt = texts[-1] if texts else NOT_GIVEN
-                response = oai_client.audio.transcriptions.create(
-                    model="whisper-1", file=audio_file, language=language, prompt=prompt
-                )
-                log.write(response.to_json() + "\n\n")
-                texts.append(response.text)
+    for path in paths:
+        # TODO: make this async somehow
+        with open(path, "rb") as audio_file:
+            prompt = text_segments[-1] if text_segments else NOT_GIVEN
 
-    return texts
+            log.debug(f"transcribing: {path}")
 
+            response = await OAI_CLIENT.audio.transcriptions.create(
+                model="whisper-1", file=audio_file, language=language, prompt=prompt
+            )
 
-def pipeline():
-    seg_paths = preprocess_audio("assets/ai_lecture_3.m4a")
-    texts = audio_to_text(seg_paths)
+            text_segments.append(response.text)
 
-    txt_paths = [f"{path}.txt" for path in seg_paths]
-
-    for path, text in zip(txt_paths, texts):
-        with open(path, "w", encoding="utf-8") as txt_file:
-            txt_file.write(text)
-
-    with open("assets/ai_lecture_3.txt", "w", encoding="utf-8") as txt_file:
-        for path in txt_paths:
-            with open(path, "r", encoding="utf-8") as in_txt_file:
-                txt_file.write(in_txt_file.read() + " ")
+    return text_segments
 
 
-if __name__ == "__main__":
-    pipeline()
+async def audio_pipeline(path: str, language: str = "ru") -> str | None:
+    try:
+        seg_paths = await preprocess_audio(path)
+        text_segments = await audio_to_text(seg_paths, language=language)
+        text = " ".join(text_segments)
+        return text
+
+    except Exception as e:
+        log.error(f"audio pipeline failed with: {e}")
+        return None

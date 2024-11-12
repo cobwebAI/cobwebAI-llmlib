@@ -161,4 +161,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-assets/*.mp3
+assets/*
+
+!assets/ai_lecture_3.m4a
+!assets/ai_lecture_3.m4a.txt

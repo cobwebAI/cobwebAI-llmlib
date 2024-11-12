@@ -11,10 +11,10 @@ langchain = "^0.3.7"
 langchain-openai = "^0.2.6"
 langchain-chroma = "^0.1.4"
 openai = "^1.54.3"
-pydub = "^0.25.1"
+aiofiles = "^24.1.0"
 
-[tool.poetry.scripts]
-audio2text = "langchain_playground.audio:pipeline"
+[tool.poetry.group.test.dependencies]  
+pytest = "^8.3.3"  
 
 [build-system]
 requires = ["poetry-core"]
