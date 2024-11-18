@@ -1,5 +1,5 @@
 import logging
-from logging.handlers import QueueHandler, QueueListener
+from logging.handlers import QueueHandler
 from queue import Queue
 
 log_queue = Queue()

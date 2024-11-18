@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "langchain-playground"
+name = "cobwebAI-llmlib"
 version = "0.1.0"
 description = ""
 authors = ["SERGEYDJUM <39106181+SERGEYDJUM@users.noreply.github.com>"]

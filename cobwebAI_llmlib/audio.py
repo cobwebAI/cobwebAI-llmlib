@@ -3,7 +3,7 @@ from openai import NOT_GIVEN, AsyncOpenAI
 from asyncio import create_subprocess_exec
 from aiofiles import ospath as aio_path
 from aiofiles.os import remove as aio_remove
-from langchain_playground import logger
+from cobwebAI_llmlib import logger
 from tempfile import gettempdir
 from uuid import uuid4
 import os

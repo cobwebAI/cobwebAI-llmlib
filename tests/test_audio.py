@@ -1,5 +1,5 @@
 import asyncio
-from langchain_playground.audio import Audio2Text
+from cobwebAI_llmlib.audio import Audio2Text
 
 
 def test_audio_pipeline():
