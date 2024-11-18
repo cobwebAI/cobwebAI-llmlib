@@ -9,7 +9,7 @@ from uuid import uuid4
 import os
 
 
-class Audio2Text:
+class Transcription:
     """Converts audio/video files to text.
     Internally splits audio into segments.
     """
