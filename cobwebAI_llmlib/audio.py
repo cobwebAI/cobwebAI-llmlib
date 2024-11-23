@@ -2,9 +2,8 @@ from logging import Logger
 from openai import NOT_GIVEN, AsyncOpenAI
 from asyncio import create_subprocess_exec
 from aiofiles import ospath as aio_path
-from aiofiles.os import remove as aio_remove
-from cobwebAI_llmlib import logger
-from tempfile import gettempdir
+from cobwebai_llmlib import logger
+from tempfile import TemporaryDirectory
 from uuid import uuid4
 import os
 
@@ -26,15 +25,13 @@ class Transcription:
     def __init__(
         self,
         oai_client: AsyncOpenAI | None = None,
-        temp_dir: str | None = None,
         log: Logger | None = None,
+        _temp_dir: str | None = None,
         **kwargs,
     ) -> None:
         """Constructs transcriber with provided resources or it's own"""
 
-        self.tempdir = (
-            temp_dir if temp_dir and os.path.isdir(temp_dir) else gettempdir()
-        )
+        self.temp_dir = _temp_dir
         self.log = log if log else logger.log
         self.oai_client = oai_client if oai_client else AsyncOpenAI(**kwargs)
 
@@ -59,12 +56,12 @@ class Transcription:
         # TODO: Improve heuristic
         return " ".join(segments)
 
-    async def audio_segmentation(self, path: str) -> list[str]:
-        """Splits input audio/video file into segments"""
+    async def audio_segmentation(self, path: str, tmpdir: str) -> list[str]:
+        """Splits input audio/video file into segments, returns paths"""
 
-        self.log.debug(f"preprocessing audio: {path}")
+        self.log.debug(f"preprocessing audio: {path} in {tmpdir}")
 
-        path_prefix = os.path.join(self.tempdir, uuid4().hex)
+        path_prefix = os.path.join(tmpdir, uuid4().hex)
 
         ffmpeg = await create_subprocess_exec(
             "ffmpeg",
@@ -93,9 +90,6 @@ class Transcription:
         segment_paths = await self.find_segments(path_prefix)
 
         if exit_code != 0:
-            for seg_path in segment_paths:
-                await aio_remove(seg_path)
-
             raise RuntimeError("audio segmentation: ffmpeg: nonzero status code")
         elif len(segment_paths) == 0:
             raise RuntimeError("audio segmentation: no segments created")
@@ -106,35 +100,36 @@ class Transcription:
         """Transcribes a list of sequential audio segments into text segments"""
         text_segments: list[str] = []
 
-        try:
-            for path in paths:
-                # TODO: make this async somehow
-                with open(path, "rb") as audio_file:
-                    prompt = text_segments[-1] if text_segments else NOT_GIVEN
+        for path in paths:
+            # TODO: make this async somehow
+            with open(path, "rb") as audio_file:
+                prompt = text_segments[-1] if text_segments else NOT_GIVEN
 
-                    self.log.debug(f"transcribing: {path}")
+                self.log.debug(f"transcribing: {path}")
 
-                    response = await self.oai_client.audio.transcriptions.create(
-                        model="whisper-1",
-                        file=audio_file,
-                        language=language,
-                        prompt=prompt,
-                    )
+                response = await self.oai_client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language=language,
+                    prompt=prompt,
+                )
 
-                    text_segments.append(response.text)
-        finally:
-            for path in paths:
-                await aio_remove(path)
+                text_segments.append(response.text)
 
         return text_segments
 
     async def transcribe_file(self, path: str, language: str = "ru") -> str | None:
         """Transcribes input video/audio file into text"""
-        try:
-            seg_paths = await self.audio_segmentation(path)
-            text_segments = await self.transcribe_segments(seg_paths, language=language)
-            return self.stitch_text_segments(text_segments)
+        output: str | None = None
 
-        except Exception as e:
-            self.log.error(f"audio pipeline failed with: {e}")
-            return None
+        # ! This is synchronous
+        with TemporaryDirectory(self.temp_dir) as tmpdir:
+            try:
+                seg_paths = await self.audio_segmentation(path, tmpdir)
+                segments = await self.transcribe_segments(seg_paths, language=language)
+                output = self.stitch_text_segments(segments)
+
+            except Exception as e:
+                self.log.error(f"transcribe_file failed with: {e}")
+
+        return output

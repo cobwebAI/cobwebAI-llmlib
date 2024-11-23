@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "cobwebAI-llmlib"
+name = "cobwebai-llmlib"
 version = "0.1.0"
 description = ""
 authors = ["SERGEYDJUM <39106181+SERGEYDJUM@users.noreply.github.com>"]
