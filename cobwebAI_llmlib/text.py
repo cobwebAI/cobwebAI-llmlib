@@ -7,7 +7,7 @@ from semchunk import chunkerify
 class TextPostProcessing:
     """Corrects speech recognition mistakes in a text chunk by chunk"""
 
-    CHUNK_SIZE = 3072
+    CHUNK_SIZE = 3500
     """Text will be split in chunks each this number of tokens at max"""
 
     SYSTEM_PROMPT = (
@@ -24,6 +24,12 @@ class TextPostProcessing:
 
     PREV_CHUNK_PROMPT = 'The previous chunk is already done for you: """\n{chunk}\n"""'
 
+    FINAL_PROMPT = (
+        "That is the end of your instructions. Get ready to recieve input text."
+    )
+
+    MODEL = "gpt-4o-mini"
+
     def __init__(
         self,
         oai_client: AsyncOpenAI | None = None,
@@ -35,8 +41,10 @@ class TextPostProcessing:
         self.log = log if log else logger.log
         self.oai_client = oai_client if oai_client else AsyncOpenAI(**kwargs)
 
-        # Shoud I disable default cache here?
-        self.splitter = chunkerify("gpt-4o-mini", chunk_size=self.CHUNK_SIZE)
+        # Shoud I disable memoization here?
+        self.splitter = chunkerify(
+            self.MODEL, chunk_size=self.CHUNK_SIZE, memoize=False
+        )
 
     def build_system_prompt(
         self,
@@ -54,28 +62,36 @@ class TextPostProcessing:
         if not theme:
             theme_prompt = ""
 
-        return f"{self.SYSTEM_PROMPT}\n{theme_prompt}\n{prev_prompt}\n"
+        return (
+            f"{self.SYSTEM_PROMPT}\n{theme_prompt}\n{prev_prompt}\n{self.FINAL_PROMPT}"
+        )
 
     async def fix_transcribed_text(
-        self, text: str, theme: str | None = None
+        self, text: str, theme: str | None = None, chunk_size: int | None = None
     ) -> str | None:
         """Post-processes supplied text"""
-
-        output_chunks: list[str] = []
 
         self.log.debug(f"post-processing text: {theme if theme else "no theme"}")
 
         try:
-            for input_chunk in self.splitter.chunk(text):
+            input_chunks: list[str] = []
+            output_chunks: list[str] = []
+
+            if chunk_size is None:
+                input_chunks = self.splitter.chunk(text)
+            else:
+                input_chunks = chunkerify(
+                    self.MODEL, chunk_size=chunk_size, memoize=False
+                ).chunk(text)
+
+            for input_chunk in input_chunks:
                 system_prompt = self.build_system_prompt(
-                    previous_chunk=(
-                        output_chunks[-1] if len(output_chunks) > 0 else None
-                    ),
+                    previous_chunk=(output_chunks[-1] if output_chunks else None),
                     theme=(theme if theme else None),
                 )
 
                 response = await self.oai_client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model=self.MODEL,
                     messages=[
                         {
                             "role": "system",
@@ -95,7 +111,9 @@ class TextPostProcessing:
 
                 output_chunks.append(response.choices[0].message.content)
 
+            return " ".join(output_chunks)
+
         except Exception as e:
             self.log.error(f"fix_transcribed_text failed with: {e}")
 
-        return " ".join(output_chunks)
+        return None

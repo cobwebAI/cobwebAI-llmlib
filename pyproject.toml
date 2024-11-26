@@ -7,9 +7,9 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-langchain = "^0.3.8"
-langchain-openai = "^0.2.10"
-langchain-chroma = "^0.1.4"
+# langchain = "^0.3.8"
+# langchain-openai = "^0.2.10"
+# langchain-chroma = "^0.1.4"
 openai = "^1.55.1"
 aiofiles = "^24.1.0"
 semchunk = "^2.2.0"
