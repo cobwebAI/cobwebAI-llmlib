@@ -164,4 +164,4 @@ cython_debug/
 assets/*
 
 !assets/ai_lecture_3.m4a
-!assets/ai_lecture_3.m4a.txt
+!assets/*.txt

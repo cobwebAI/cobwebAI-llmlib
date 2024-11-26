@@ -29,7 +29,7 @@ class Transcription:
         _temp_dir: str | None = None,
         **kwargs,
     ) -> None:
-        """Constructs transcriber with provided resources or it's own"""
+        """Constructs transcriber with provided resources or its own"""
 
         self.temp_dir = _temp_dir
         self.log = log if log else logger.log
