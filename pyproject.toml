@@ -1,6 +1,6 @@
 [tool.poetry]
-name = "cobwebai-llmlib"
-version = "0.1.0"
+name = "cobwebai-lib"
+version = "0.1.1"
 description = ""
 authors = ["SERGEYDJUM <39106181+SERGEYDJUM@users.noreply.github.com>"]
 readme = "README.md"
@@ -10,12 +10,12 @@ python = "^3.12"
 # langchain = "^0.3.8"
 # langchain-openai = "^0.2.10"
 # langchain-chroma = "^0.1.4"
-openai = "^1.55.1"
+openai = "^1.56.2"
 aiofiles = "^24.1.0"
 semchunk = "^2.2.0"
 
 [tool.poetry.group.test.dependencies]  
-pytest = "^8.3.3"  
+pytest = "^8.3.4"  
 
 [build-system]
 requires = ["poetry-core"]

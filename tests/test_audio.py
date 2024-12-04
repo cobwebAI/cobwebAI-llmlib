@@ -1,5 +1,5 @@
 import asyncio
-from cobwebai_llmlib.audio import Transcription
+from cobwebai_lib.audio import Transcription
 
 
 def test_audio_pipeline():

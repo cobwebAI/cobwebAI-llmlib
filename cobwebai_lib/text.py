@@ -1,6 +1,6 @@
 from logging import Logger
 from openai import AsyncOpenAI
-from cobwebai_llmlib import logger
+from .logger import log as local_log
 from semchunk import chunkerify
 
 
@@ -38,7 +38,7 @@ class TextPostProcessing:
     ) -> None:
         """Constructs text post-processor with provided resources or its own"""
 
-        self.log = log if log else logger.log
+        self.log = log if log else local_log
         self.oai_client = oai_client if oai_client else AsyncOpenAI(**kwargs)
 
         # Shoud I disable memoization here?

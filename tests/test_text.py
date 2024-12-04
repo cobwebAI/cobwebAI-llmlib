@@ -1,5 +1,5 @@
 import asyncio
-from cobwebai_llmlib.text import TextPostProcessing
+from cobwebai_lib.text import TextPostProcessing
 
 
 def test_text_fix():
