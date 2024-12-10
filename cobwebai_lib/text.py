@@ -1,6 +1,5 @@
-from logging import Logger
+from loguru import logger
 from openai import AsyncOpenAI
-from .logger import log as local_log
 from semchunk import chunkerify
 
 
@@ -33,12 +32,11 @@ class TextPostProcessing:
     def __init__(
         self,
         oai_client: AsyncOpenAI | None = None,
-        log: Logger | None = None,
         **kwargs,
     ) -> None:
         """Constructs text post-processor with provided resources or its own"""
 
-        self.log = log if log else local_log
+        self.log = logger
         self.oai_client = oai_client if oai_client else AsyncOpenAI(**kwargs)
 
         # Shoud I disable memoization here?

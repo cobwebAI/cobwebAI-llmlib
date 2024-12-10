@@ -1,8 +1,7 @@
-from logging import Logger
 from openai import NOT_GIVEN, AsyncOpenAI
 from asyncio import create_subprocess_exec
 from aiofiles import ospath as aio_path
-from .logger import log as local_log
+from loguru import logger
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 import os
@@ -25,14 +24,13 @@ class Transcription:
     def __init__(
         self,
         oai_client: AsyncOpenAI | None = None,
-        log: Logger | None = None,
         _temp_dir: str | None = None,
         **kwargs,
     ) -> None:
         """Constructs transcriber with provided resources or its own"""
 
         self.temp_dir = _temp_dir
-        self.log = log if log else local_log
+        self.log = logger
         self.oai_client = oai_client if oai_client else AsyncOpenAI(**kwargs)
 
     @staticmethod
