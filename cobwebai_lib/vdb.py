@@ -1,4 +1,5 @@
 from typing import Generator, Tuple
+from uuid import UUID, uuid5
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from chromadb import AsyncHttpClient
@@ -6,8 +7,6 @@ from chromadb.errors import InvalidCollectionException
 from chromadb.utils.embedding_functions.openai_embedding_function import (
     OpenAIEmbeddingFunction,
 )
-from uuid import UUID, uuid5
-import asyncio
 
 
 class VectorDB:
@@ -31,7 +30,7 @@ class VectorDB:
             oai_key (str): OpenAI key (for embedding purposes).
         """
 
-        self.chroma = asyncio.run(AsyncHttpClient(port=chroma_port))
+        self.chroma_port = chroma_port
         self.embed_model = OpenAIEmbeddingFunction(
             model_name=embed_model_name,
             api_key=oai_key,
@@ -51,7 +50,8 @@ class VectorDB:
         user_id = str(user_id)
 
         try:
-            collection = await self.chroma.get_collection(
+            chroma = await AsyncHttpClient(port=self.chroma_port)
+            collection = await chroma.get_collection(
                 user_id,
                 embedding_function=self.embed_model,
             )
@@ -73,7 +73,8 @@ class VectorDB:
         project_id = str(project_id)
 
         try:
-            collection = await self.chroma.get_collection(
+            chroma = await AsyncHttpClient(port=self.chroma_port)
+            collection = await chroma.get_collection(
                 user_id,
                 embedding_function=self.embed_model,
             )
@@ -97,15 +98,14 @@ class VectorDB:
         user_id = str(user_id)
 
         try:
-            await self.chroma.get_collection(
-                user_id, embedding_function=self.embed_model
-            )
+            chroma = await AsyncHttpClient(port=self.chroma_port)
+            await chroma.get_collection(user_id, embedding_function=self.embed_model)
         except InvalidCollectionException:
             return False
         except ValueError:
             return False
 
-        await self.chroma.delete_collection(user_id)
+        await chroma.delete_collection(user_id)
         return True
 
     def _split_documents(
@@ -132,7 +132,8 @@ class VectorDB:
         user_id = str(user_id)
         project_id = str(project_id)
 
-        collection = await self.chroma.get_or_create_collection(
+        chroma = await AsyncHttpClient(port=self.chroma_port)
+        collection = await chroma.get_or_create_collection(
             user_id,
             embedding_function=self.embed_model,
         )
@@ -173,7 +174,8 @@ class VectorDB:
         project_id = str(project_id)
 
         try:
-            collection = await self.chroma.get_collection(
+            chroma = await AsyncHttpClient(port=self.chroma_port)
+            collection = await chroma.get_collection(
                 user_id,
                 embedding_function=self.embed_model,
             )
