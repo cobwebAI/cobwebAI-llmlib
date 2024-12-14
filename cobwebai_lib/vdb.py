@@ -88,6 +88,31 @@ class VectorDB:
 
         return True
 
+    async def delete_document(self, user_id: UUID, document_id: UUID) -> bool:
+        """Removes all data associated with the document from user's collection.
+
+        Returns:
+            bool: false if nothing changed.
+        """
+        user_id = str(user_id)
+        document_id = str(document_id)
+
+        try:
+            chroma = await AsyncHttpClient(port=self.chroma_port)
+            collection = await chroma.get_collection(
+                user_id,
+                embedding_function=self.embed_model,
+            )
+
+            await collection.delete(where={"document_id": document_id})
+
+        except InvalidCollectionException:
+            return False
+        except ValueError:
+            return False
+
+        return True
+
     async def delete_user(self, user_id: UUID) -> bool:
         """Removes user's collection from Chroma.
 
@@ -117,13 +142,65 @@ class VectorDB:
             meta = part.metadata
             yield (uid, content, meta)
 
-    async def add_text_to_project(
-        self, user_id: UUID, project_id: UUID, text: str
-    ) -> list[UUID]:
-        """Splits and embeds text into Chroma.
+    async def retrieve(
+        self,
+        user_id: UUID,
+        query: str,
+        project_id: UUID | None = None,
+        document_id: UUID | None = None,
+        n_results: int = 1,
+    ) -> list[str]:
+        """Retrieves texts that are closest to query in embedding space.
+        Can query by project AND/OR by document id.
 
         Args:
-            text (str): literally any string.
+            query (str): search input.
+            n_results (int, optional): number of neighbors to find. Defaults to 1.
+
+        Returns:
+            list[str]: nearest texts.
+            Empty on exception or if BOTH project and query ids are None.
+        """
+
+        if not project_id and not document_id:
+            return []
+
+        user_id = str(user_id)
+        project_id = str(project_id)
+
+        where_meta = []
+
+        if project_id:
+            where_meta.append({"project_id": project_id})
+
+        if document_id:
+            where_meta.append({"document_id": document_id})
+
+        try:
+            chroma = await AsyncHttpClient(port=self.chroma_port)
+            collection = await chroma.get_collection(
+                user_id,
+                embedding_function=self.embed_model,
+            )
+
+            retrieved = await collection.query(
+                query_texts=query,
+                where={"$and": where_meta} if where_meta else None,
+                n_results=n_results,
+                include=["documents"],
+            )
+
+            return retrieved["documents"]
+
+        except InvalidCollectionException:
+            return []
+        except ValueError:
+            return []
+
+    async def add_document_to_project(
+        self, user_id: UUID, project_id: UUID, document_id: UUID, text: str
+    ) -> list[UUID]:
+        """Splits and embeds text into Chroma.
 
         Returns:
             list[UUID]: ids of created embeddings.
@@ -139,7 +216,9 @@ class VectorDB:
         )
 
         documents = [
-            Document(text, metadata={"user_id": user_id, "project_id": project_id})
+            Document(
+                text, metadata={"project_id": project_id, "document_id": document_id}
+            )
         ]
 
         ids = []
@@ -157,39 +236,14 @@ class VectorDB:
 
         return ids
 
-    async def retrieve(
-        self, user_id: UUID, project_id: UUID, query: str, n_results: int = 1
+    async def store_and_retrieve(
+        self,
+        user_id: UUID,
+        project_id: UUID,
+        document_id: UUID,
+        content: str,
+        query: str,
+        n_results: int = 1,
     ) -> list[str]:
-        """Retrieves texts that are closest to query in embedding space.
-
-        Args:
-            query (str): search input.
-            n_results (int, optional): number of neighbors to find. Defaults to 1.
-
-        Returns:
-            list[str]: nearest texts.
-        """
-
-        user_id = str(user_id)
-        project_id = str(project_id)
-
-        try:
-            chroma = await AsyncHttpClient(port=self.chroma_port)
-            collection = await chroma.get_collection(
-                user_id,
-                embedding_function=self.embed_model,
-            )
-
-            retrieved = await collection.query(
-                query_texts=query,
-                where={"project_id": project_id},
-                n_results=n_results,
-                include=["documents"],
-            )
-
-            return retrieved["documents"]
-
-        except InvalidCollectionException:
-            return []
-        except ValueError:
-            return []
+        await self.add_document_to_project(user_id, project_id, document_id, content)
+        return await self.retrieve(user_id, query, project_id, document_id, n_results)

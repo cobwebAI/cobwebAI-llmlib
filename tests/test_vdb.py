@@ -12,9 +12,9 @@ async def vdb():
 
     await vdb.delete_project(user, project)
 
-    assert await vdb.add_text_to_project(
+    assert await vdb.add_document_to_project(
         user, project, text
-    ) == await vdb.add_text_to_project(user, project, text)
+    ) == await vdb.add_document_to_project(user, project, text)
 
     retrieved = await vdb.retrieve(user, project, "MAE и MSE", n_results=2)
     assert len(retrieved) > 0
@@ -23,7 +23,7 @@ async def vdb():
     assert await vdb.delete_project(user, project)
     assert await vdb.delete_user(user)
 
-    embedding_ids = await vdb.add_text_to_project(user, project, text)
+    embedding_ids = await vdb.add_document_to_project(user, project, text)
     assert await vdb.delete_embeddings(user, embedding_ids)
 
 
