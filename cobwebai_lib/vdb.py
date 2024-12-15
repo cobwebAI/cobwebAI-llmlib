@@ -1,8 +1,11 @@
 from typing import Generator, Tuple
+from loguru import logger
 from uuid import UUID, uuid5
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from chromadb import AsyncHttpClient
+from chromadb.api.models.AsyncCollection import AsyncCollection
+from chromadb.api import AsyncClientAPI
 from chromadb.errors import InvalidCollectionException
 from chromadb.utils.embedding_functions.openai_embedding_function import (
     OpenAIEmbeddingFunction,
@@ -30,6 +33,7 @@ class VectorDB:
             oai_key (str): OpenAI key (for embedding purposes).
         """
 
+        self.log = logger
         self.chroma_port = chroma_port
         self.embed_model = OpenAIEmbeddingFunction(
             model_name=embed_model_name,
@@ -41,75 +45,79 @@ class VectorDB:
             add_start_index=True,
         )
 
-    async def delete_embeddings(self, user_id: UUID, embedding_ids: list[UUID]) -> bool:
-        """Removes embeddings from user's collection.
+    async def _get_or_create_chroma_collection(
+        self, user_id: UUID
+    ) -> tuple[AsyncClientAPI, AsyncCollection]:
+        chroma = await AsyncHttpClient(port=self.chroma_port)
+        collection = await chroma.get_or_create_collection(
+            user_id,
+            embedding_function=self.embed_model,
+        )
 
-        Returns:
-            bool: false if nothing changed.
-        """
-        user_id = str(user_id)
+        return (chroma, collection)
 
+    async def _try_get_chroma_collection(
+        self, user_id: UUID
+    ) -> tuple[AsyncClientAPI, AsyncCollection] | tuple[None, None]:
         try:
             chroma = await AsyncHttpClient(port=self.chroma_port)
             collection = await chroma.get_collection(
                 user_id,
                 embedding_function=self.embed_model,
             )
+            return (chroma, collection)
         except InvalidCollectionException:
-            return False
+            return (None, None)
         except ValueError:
+            return (None, None)
+
+    async def delete_embeddings(self, user_id: UUID, embedding_ids: list[UUID]) -> bool:
+        """Removes embeddings from user's collection.
+
+        Returns:
+            bool: False if no such user.
+        """
+
+        chroma, collection = await self._try_get_chroma_collection(user_id)
+
+        if collection is None:
             return False
 
         await collection.delete(ids=list(map(str, embedding_ids)))
+
         return True
 
     async def delete_project(self, user_id: UUID, project_id: UUID) -> bool:
         """Removes all data associated with project from user's collection.
 
         Returns:
-            bool: false if nothing changed.
+            bool: False if no such user.
         """
-        user_id = str(user_id)
         project_id = str(project_id)
 
-        try:
-            chroma = await AsyncHttpClient(port=self.chroma_port)
-            collection = await chroma.get_collection(
-                user_id,
-                embedding_function=self.embed_model,
-            )
+        chroma, collection = await self._try_get_chroma_collection(user_id)
 
-            await collection.delete(where={"project_id": project_id})
+        if collection is None:
+            return False
 
-        except InvalidCollectionException:
-            return False
-        except ValueError:
-            return False
+        await collection.delete(where={"project_id": project_id})
 
         return True
 
-    async def delete_document(self, user_id: UUID, document_id: UUID) -> bool:
+    async def invalidate_document(self, user_id: UUID, document_id: UUID) -> bool:
         """Removes all data associated with the document from user's collection.
 
         Returns:
-            bool: false if nothing changed.
+            bool: False if no such user.
         """
-        user_id = str(user_id)
         document_id = str(document_id)
 
-        try:
-            chroma = await AsyncHttpClient(port=self.chroma_port)
-            collection = await chroma.get_collection(
-                user_id,
-                embedding_function=self.embed_model,
-            )
+        chroma, collection = await self._try_get_chroma_collection(user_id)
 
-            await collection.delete(where={"document_id": document_id})
+        if collection is None:
+            return False
 
-        except InvalidCollectionException:
-            return False
-        except ValueError:
-            return False
+        await collection.delete(where={"document_id": document_id})
 
         return True
 
@@ -117,7 +125,7 @@ class VectorDB:
         """Removes user's collection from Chroma.
 
         Returns:
-            bool: false if there was no such user-collection.
+            bool: False if there was no such user-collection.
         """
 
         user_id = str(user_id)
@@ -137,10 +145,33 @@ class VectorDB:
         self, documents: list[Document]
     ) -> Generator[Tuple[UUID, str, dict], None, None]:
         for part in self.splitter.split_documents(documents):
-            uid = uuid5(UUID(int=0x12345678123456781234567812345678), part.page_content)
             content = part.page_content
             meta = part.metadata
-            yield (uid, content, meta)
+
+            to_hash = content + meta["project_id"] + meta["document_id"]
+            uuid_from_hash = uuid5(
+                UUID(int=0x12345678123456781234567812345678), to_hash
+            )
+
+            yield (uuid_from_hash, content, meta)
+
+    def _prepare_document(
+        self, project_id: UUID, document_id: UUID, text: str
+    ) -> tuple[list[UUID], list[str], list[str], list[dict]]:
+        document = Document(
+            text,
+            metadata={"project_id": str(project_id), "document_id": str(document_id)},
+        )
+
+        ids, str_ids, contents, metas = [], [], [], []
+
+        for uid, content, meta in self._split_documents([document]):
+            ids.append(uid)
+            str_ids.append(str(uid))
+            contents.append(content)
+            metas.append(meta)
+
+        return (ids, str_ids, contents, metas)
 
     async def retrieve(
         self,
@@ -165,37 +196,28 @@ class VectorDB:
         if not project_id and not document_id:
             return []
 
-        user_id = str(user_id)
-        project_id = str(project_id)
-
         where_meta = []
 
         if project_id:
-            where_meta.append({"project_id": project_id})
+            where_meta.append({"project_id": str(project_id)})
 
         if document_id:
-            where_meta.append({"document_id": document_id})
+            where_meta.append({"document_id": str(document_id)})
 
-        try:
-            chroma = await AsyncHttpClient(port=self.chroma_port)
-            collection = await chroma.get_collection(
-                user_id,
-                embedding_function=self.embed_model,
-            )
+        chroma, collection = await self._try_get_chroma_collection(user_id)
 
-            retrieved = await collection.query(
-                query_texts=query,
-                where={"$and": where_meta} if where_meta else None,
-                n_results=n_results,
-                include=["documents"],
-            )
-
-            return retrieved["documents"]
-
-        except InvalidCollectionException:
+        if collection is None:
+            self.log.warning(f"Collection for user `{user_id}` doesn't exist")
             return []
-        except ValueError:
-            return []
+
+        retrieved = await collection.query(
+            query_texts=query,
+            where={"$and": where_meta} if where_meta else None,
+            n_results=n_results,
+            include=["documents"],
+        )
+
+        return retrieved["documents"][0]
 
     async def add_document_to_project(
         self, user_id: UUID, project_id: UUID, document_id: UUID, text: str
@@ -206,35 +228,51 @@ class VectorDB:
             list[UUID]: ids of created embeddings.
         """
 
-        user_id = str(user_id)
-        project_id = str(project_id)
+        chroma, collection = await self._get_or_create_chroma_collection(user_id)
 
-        chroma = await AsyncHttpClient(port=self.chroma_port)
-        collection = await chroma.get_or_create_collection(
-            user_id,
-            embedding_function=self.embed_model,
+        ids, str_ids, contents, metas = self._prepare_document(
+            project_id, document_id, text
         )
 
-        documents = [
-            Document(
-                text, metadata={"project_id": project_id, "document_id": document_id}
-            )
-        ]
-
-        ids = []
-        contents = []
-        metas = []
-
-        for uid, content, meta in self._split_documents(documents):
-            ids.append(uid)
-            contents.append(content)
-            metas.append(meta)
-
-        await collection.add(
-            ids=list(map(str, ids)), metadatas=metas, documents=contents
-        )
+        await collection.add(ids=str_ids, metadatas=metas, documents=contents)
 
         return ids
+
+    async def add_document_and_query(
+        self,
+        user_id: UUID,
+        project_id: UUID,
+        document_id: UUID,
+        text: str,
+        query: str,
+        n_results: int = 2,
+    ) -> list[str]:
+        """Adds document to chroma with overwriting and then queries it.
+
+        Args:
+            query (str): search input.
+            n_results (int, optional): number of neighbors to find. Defaults to 1.
+
+        Returns:
+            list[str]: texts of embeddings closest to query.
+        """
+
+        chroma, collection = await self._get_or_create_chroma_collection(user_id)
+
+        ids, str_ids, contents, metas = self._prepare_document(
+            project_id, document_id, text
+        )
+
+        await collection.add(ids=str_ids, metadatas=metas, documents=contents)
+
+        retrieved = await collection.query(
+            query_texts=query,
+            where={"document_id": str(document_id)},
+            n_results=n_results,
+            include=["documents"],
+        )
+
+        return retrieved["documents"][0]
 
     async def store_and_retrieve(
         self,
@@ -243,7 +281,47 @@ class VectorDB:
         document_id: UUID,
         content: str,
         query: str,
-        n_results: int = 1,
+        n_results: int = 2,
     ) -> list[str]:
-        await self.add_document_to_project(user_id, project_id, document_id, content)
-        return await self.retrieve(user_id, query, project_id, document_id, n_results)
+        """Optimized function to use with chatbots.
+        Queries document with or without storing it first.
+
+        Note: document must be invalidated properly on change!
+
+        Args:
+            content (str): document's content.
+            query (str): search input.
+            n_results (int, optional): number of neighbors to find. Defaults to 1.
+
+        Returns:
+            list[str]: texts of embeddings closest to query.
+            Might be empty.
+        """
+
+        content = content.strip()
+        query = query.strip()
+        str_document_id = str(document_id)
+
+        chroma, collection = await self._try_get_chroma_collection(user_id)
+
+        if collection is not None:
+            metadatas = await collection.get(
+                where={"document_id": str_document_id}, include=["metadatas"]
+            )
+
+            if metadatas["ids"]:
+                retrieved = await collection.query(
+                    query_texts=query,
+                    where={"document_id": str_document_id},
+                    n_results=n_results,
+                    include=["documents"],
+                )
+
+                return retrieved["documents"][0]
+
+        del collection
+        del chroma
+
+        return await self.add_document_and_query(
+            user_id, project_id, document_id, content, query, n_results
+        )
