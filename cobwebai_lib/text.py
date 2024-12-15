@@ -29,8 +29,9 @@ class TextPostProcessing:
 
     CONSPECT_SYSTEM_PROMPT = (
         "Your task is to extract as much knowledge as possible from user's text by creating something like lecture notes. "
-        "If text is too short for that task, just rewrite it to be more readable. "
-        "You are advised to use markdown, and you are allowed to use LaTeX there. "
+        "If input text is too short for that task, just rewrite it to be more readable. "
+        "You are advised to use markdown, with LaTeX there (using $ symbols). "
+        "If you are confident, you should elaborate on terms and definitions, as well as add formulas and equations too. "
         "Respond only with output text in the same language as the input text."
     )
 
