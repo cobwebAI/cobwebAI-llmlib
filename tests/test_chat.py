@@ -10,16 +10,17 @@ async def chat():
 
     user = UUID(int=0x12345678123456781234567812345675)
     project = user
+    
     document = ChatAttachment(
         UUID(int=0x12345678123456781234567812345674),
         open("assets/ai_lecture_3_fixed_chunk3072.txt", encoding="utf-8").read(),
     )
 
     user_msg, bot_msg = await llm.chat_with_rag(
-        user,
-        project,
-        "Что такое AlexNet?",
-        [document],
+        user_id=user,
+        project_id=project,
+        user_prompt="Что такое AlexNet?",
+        attachments=[document],
     )
 
     print()

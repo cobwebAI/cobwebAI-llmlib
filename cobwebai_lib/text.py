@@ -27,6 +27,13 @@ class TextPostProcessing:
         "That is the end of your instructions. Get ready to recieve input text."
     )
 
+    CONSPECT_SYSTEM_PROMPT = (
+        "Your task is to extract as much knowledge as possible from user's text by creating something like lecture notes. "
+        "If text is too short for that task, just rewrite it to be more readable. "
+        "You are advised to use markdown, and you are allowed to use LaTeX there. "
+        "Respond only with output text in the same language as the input text."
+    )
+
     MODEL = "gpt-4o-mini"
 
     def __init__(
@@ -113,5 +120,43 @@ class TextPostProcessing:
 
         except Exception as e:
             self.log.error(f"fix_transcribed_text failed with: {e}")
+
+        return None
+
+    async def create_conspect(self, text: str, theme: str | None = None) -> str | None:
+        """Creates an outline from input text"""
+
+        self.log.debug(f"outlining text: {theme if theme else "no theme"}")
+
+        try:
+            system_prompt = (
+                f"{self.CONSPECT_SYSTEM_PROMPT}/n{self.THEME_PROMPT.format(theme=theme)}"
+                if theme
+                else self.CONSPECT_SYSTEM_PROMPT
+            )
+
+            response = await self.oai_client.chat.completions.create(
+                model=self.MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    },
+                    {
+                        "role": "user",
+                        "content": text.strip(),
+                    },
+                ],
+            )
+
+            if response.choices[0].finish_reason != "stop":
+                raise RuntimeError("text processing: unsuccessfull generation")
+            elif response.choices[0].message.refusal:
+                raise RuntimeError("text processing: model refusal")
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+            self.log.error(f"outlining failed with: {e}")
 
         return None
