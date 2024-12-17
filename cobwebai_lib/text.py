@@ -18,7 +18,7 @@ class TextPostProcessing:
     )
 
     THEME_PROMPT = (
-        "You are provided with a theme of the entire text to guide you: {theme}."
+        "You are provided with an approximate theme/description of the entire text to guide you: {theme}."
     )
 
     PREV_CHUNK_PROMPT = 'The previous chunk is already done for you: """\n{chunk}\n"""'
@@ -34,6 +34,11 @@ class TextPostProcessing:
         "If you are confident, you should elaborate on terms and definitions, as well as add formulas and equations too. "
         "Respond only with output text in the same language as the input text."
     )
+
+    MULTITEXT_PROMPT = {
+        'Mutliple texts are supplied, separated by "==TEXT SEPARATOR==", '
+        "you need to adjust markdown headings accordingly"
+    }
 
     MODEL = "gpt-4o-mini"
 
