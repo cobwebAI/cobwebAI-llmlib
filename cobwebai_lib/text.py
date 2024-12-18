@@ -28,7 +28,7 @@ class TextPostProcessing:
     CONSPECT_SYSTEM_PROMPT = (
         "Your task is to extract as much knowledge as possible from user's text by creating something like lecture notes. "
         "If input text is too short for that task, just rewrite it to be more readable. "
-        "You are advised to use markdown, with LaTeX there (using $ symbols). "
+        "You are advised to use GitHub Flavored Markdown. "
         "If you are confident, you should elaborate on terms and definitions, as well as add formulas and equations too. "
         "Respond only with output text in the same language as the input text."
     )
@@ -122,9 +122,14 @@ class TextPostProcessing:
                 self.MODEL, chunk_size=chunk_size, memoize=False
             ).chunk(text)
 
-        for input_chunk in input_chunks:
+        for i, input_chunk in enumerate(input_chunks):
+            previous_chunk = None
+            
+            if i > 0 and len(input_chunks) > 1:
+                previous_chunk = output_chunks[i-1]
+            
             system_prompt = self._chunking_system_prompt(
-                previous_chunk=(output_chunks[-1] if output_chunks else None),
+                previous_chunk=previous_chunk,
                 theme=(theme if theme else None),
             )
 
