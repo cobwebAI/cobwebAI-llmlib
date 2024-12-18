@@ -85,3 +85,12 @@ class LLMTools:
         title = await self.s2t_pp.make_title(content)
 
         return (title, content)
+
+    async def transcribe_avfile(
+        self, path: str, language: str = "ru", theme: str | None = None
+    ) -> str:
+        """Transcribes audio/video file with post-processing"""
+
+        raw_text = await self.s2t.transcribe_file(path, language)
+        fixed_text = await self.s2t_pp.fix_transcribed_text(raw_text, theme)
+        return fixed_text
