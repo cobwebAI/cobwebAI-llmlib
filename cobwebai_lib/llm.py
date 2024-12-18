@@ -52,6 +52,8 @@ class LLMTools:
         attachments: list[ChatAttachment] = [],
         history: list[Message] = [],
     ) -> tuple[UserMessage, BotResponse] | tuple[UserMessage, None] | None:
+        """Responds to user's prompt and attached context using automatic optional RAG"""
+
         user_prompt = user_prompt.strip()
 
         if not user_prompt:
@@ -66,3 +68,20 @@ class LLMTools:
         )
 
         return (user_msg, await self.chat.invoke_chat(user_msg, history))
+
+    async def generate_note(
+        self, files: list[str], custom_description: str | None = None
+    ) -> tuple[str, str]:
+        """Generates title and content of a note from specified files (texts).
+
+        Args:
+            cutom_description (str | None): theme/description of files.
+
+        Returns:
+            tuple[str, str]: theme and content of note.
+        """
+
+        content = await self.s2t_pp.create_conspect_multi(files, custom_description)
+        title = await self.s2t_pp.make_title(content)
+
+        return (title, content)

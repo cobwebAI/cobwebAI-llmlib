@@ -2,7 +2,7 @@ from openai import NOT_GIVEN, AsyncOpenAI
 from asyncio import create_subprocess_exec
 from aiofiles import ospath as aio_path
 from loguru import logger
-from tempfile import TemporaryDirectory
+from aiofiles import tempfile
 from uuid import uuid4
 import os
 
@@ -116,18 +116,10 @@ class Transcription:
 
         return text_segments
 
-    async def transcribe_file(self, path: str, language: str = "ru") -> str | None:
+    async def transcribe_file(self, path: str, language: str = "ru") -> str:
         """Transcribes input video/audio file into text"""
-        output: str | None = None
 
-        # ! This is synchronous
-        with TemporaryDirectory(self.temp_dir) as tmpdir:
-            try:
-                seg_paths = await self.audio_segmentation(path, tmpdir)
-                segments = await self.transcribe_segments(seg_paths, language=language)
-                output = self.stitch_text_segments(segments)
-
-            except Exception as e:
-                self.log.error(f"transcribe_file failed with: {e}")
-
-        return output
+        async with tempfile.TemporaryDirectory() as tmpdir:
+            seg_paths = await self.audio_segmentation(path, tmpdir)
+            segments = await self.transcribe_segments(seg_paths, language=language)
+            return self.stitch_text_segments(segments)

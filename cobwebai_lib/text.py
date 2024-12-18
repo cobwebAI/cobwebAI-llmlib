@@ -17,9 +17,7 @@ class TextPostProcessing:
         "Respond only with edited text in the same language as the input chunk."
     )
 
-    THEME_PROMPT = (
-        "You are provided with an approximate theme/description of the entire text to guide you: {theme}."
-    )
+    THEME_PROMPT = "You are provided with a probably correct approximate theme/description to guide you: {theme}."
 
     PREV_CHUNK_PROMPT = 'The previous chunk is already done for you: """\n{chunk}\n"""'
 
@@ -35,10 +33,15 @@ class TextPostProcessing:
         "Respond only with output text in the same language as the input text."
     )
 
-    MULTITEXT_PROMPT = {
-        'Mutliple texts are supplied, separated by "==TEXT SEPARATOR==", '
-        "you need to adjust markdown headings accordingly"
-    }
+    MULTITEXT_PROMPT = (
+        'Mutliple texts are supplied, separated for your convenience by "==TEXT SEPARATOR==", '
+        "take that into consideration when writing headings."
+    )
+
+    NAMING_PROMPT = (
+        "You task is to create an appropriate descriptive title of the text provided by user. "
+        "Respond only with a title in the same language as the input text."
+    )
 
     MODEL = "gpt-4o-mini"
 
@@ -57,7 +60,29 @@ class TextPostProcessing:
             self.MODEL, chunk_size=self.CHUNK_SIZE, memoize=False
         )
 
-    def build_system_prompt(
+    async def _invoke_llm_simple(self, system_prompt: str, user_prompt: str) -> str:
+        response = await self.oai_client.chat.completions.create(
+            model=self.MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                },
+            ],
+        )
+
+        if response.choices[0].finish_reason != "stop":
+            raise RuntimeError("text processing: unsuccessfull generation")
+        elif response.choices[0].message.refusal:
+            raise RuntimeError("text processing: model refusal")
+
+        return response.choices[0].message.content
+
+    def _chunking_system_prompt(
         self,
         previous_chunk: str | None = None,
         theme: str | None = None,
@@ -79,90 +104,60 @@ class TextPostProcessing:
 
     async def fix_transcribed_text(
         self, text: str, theme: str | None = None, chunk_size: int | None = None
-    ) -> str | None:
+    ) -> str:
         """Post-processes supplied text"""
 
         self.log.debug(f"post-processing text: {theme if theme else "no theme"}")
+        
+        if not text.strip():
+            raise ValueError("no text supplied")
 
-        try:
-            input_chunks: list[str] = []
-            output_chunks: list[str] = []
+        input_chunks: list[str] = []
+        output_chunks: list[str] = []
 
-            if chunk_size is None:
-                input_chunks = self.splitter.chunk(text)
-            else:
-                input_chunks = chunkerify(
-                    self.MODEL, chunk_size=chunk_size, memoize=False
-                ).chunk(text)
+        if chunk_size is None:
+            input_chunks = self.splitter.chunk(text)
+        else:
+            input_chunks = chunkerify(
+                self.MODEL, chunk_size=chunk_size, memoize=False
+            ).chunk(text)
 
-            for input_chunk in input_chunks:
-                system_prompt = self.build_system_prompt(
-                    previous_chunk=(output_chunks[-1] if output_chunks else None),
-                    theme=(theme if theme else None),
-                )
+        for input_chunk in input_chunks:
+            system_prompt = self._chunking_system_prompt(
+                previous_chunk=(output_chunks[-1] if output_chunks else None),
+                theme=(theme if theme else None),
+            )
 
-                response = await self.oai_client.chat.completions.create(
-                    model=self.MODEL,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": system_prompt,
-                        },
-                        {
-                            "role": "user",
-                            "content": input_chunk,
-                        },
-                    ],
-                )
+            output_chunks.append(
+                await self._invoke_llm_simple(system_prompt, input_chunk)
+            )
 
-                if response.choices[0].finish_reason != "stop":
-                    raise RuntimeError("text processing: unsuccessfull generation")
-                elif response.choices[0].message.refusal:
-                    raise RuntimeError("text processing: model refusal")
-
-                output_chunks.append(response.choices[0].message.content)
-
-            return " ".join(output_chunks)
-
-        except Exception as e:
-            self.log.error(f"fix_transcribed_text failed with: {e}")
-
-        return None
-
-    async def create_conspect(self, text: str, theme: str | None = None) -> str | None:
+        return " ".join(output_chunks)
+    
+    async def create_conspect_multi(self, texts: list[str], theme: str | None = None) -> str:
         """Creates an outline from input text"""
 
-        self.log.debug(f"outlining text: {theme if theme else "no theme"}")
+        self.log.debug(f"outlining multiple texts: {theme if theme else "no theme"}")
+        
+        if not texts:
+            return ValueError("no files supplied")
 
-        try:
-            system_prompt = (
-                f"{self.CONSPECT_SYSTEM_PROMPT}/n{self.THEME_PROMPT.format(theme=theme)}"
-                if theme
-                else self.CONSPECT_SYSTEM_PROMPT
-            )
+        system_prompt = (
+            f"{self.CONSPECT_SYSTEM_PROMPT}/n{self.THEME_PROMPT.format(theme=theme)}/n"
+            if theme
+            else self.CONSPECT_SYSTEM_PROMPT
+        )
+        
+        if len(texts) > 1:
+            system_prompt += self.MULTITEXT_PROMPT
+        
+        text = "\n\n==TEXT SEPARATOR==\n\n".join(map(lambda x: x.strip(), texts))
 
-            response = await self.oai_client.chat.completions.create(
-                model=self.MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": system_prompt,
-                    },
-                    {
-                        "role": "user",
-                        "content": text.strip(),
-                    },
-                ],
-            )
+        return await self._invoke_llm_simple(system_prompt, text)
 
-            if response.choices[0].finish_reason != "stop":
-                raise RuntimeError("text processing: unsuccessfull generation")
-            elif response.choices[0].message.refusal:
-                raise RuntimeError("text processing: model refusal")
+    async def make_title(self, text: str) -> str:
+        """Creates a title for input text"""
 
-            return response.choices[0].message.content
+        self.log.debug(f"creating title for a text")
 
-        except Exception as e:
-            self.log.error(f"outlining failed with: {e}")
-
-        return None
+        return await self._invoke_llm_simple(self.NAMING_PROMPT, text.strip())
