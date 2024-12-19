@@ -75,10 +75,6 @@ class LLMTools:
             rag_attachments (list[ChatAttachment], optional): Attachments to preferably pass through vector db. Defaults to [].
         """
 
-        self.log.info(
-            f"chatting: user {user_id} with {len(attachments)} attachments and {len(rag_attachments)} rag_attachments"
-        )
-
         user_prompt = user_prompt.strip()
 
         if not user_prompt:
@@ -93,7 +89,7 @@ class LLMTools:
         )
 
         self.log.info(
-            f"chatting: user {user_id}, final attachment length {len(user_msg.attachment)}"
+            f"chatting: user {user_id}, final attachment length {len(user_msg.attachment if user_msg.attachment else "")}"
         )
 
         return (user_msg, await self.chat.invoke_chat(user_msg, history))
