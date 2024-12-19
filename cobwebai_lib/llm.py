@@ -1,4 +1,5 @@
 from uuid import UUID
+from loguru import logger
 from openai import AsyncOpenAI
 from .vdb import VectorDB
 from .audio import Transcription
@@ -10,9 +11,11 @@ class LLMTools:
     OAI_MODEL = "gpt-4o-mini"
     OAI_EMBED_MODEL = "text-embedding-ada-002"
 
-    ATTACHMENT_MAX_LEN = 1024
+    ATTACHMENT_RAG_CUTOFF_LEN = 4096
+    FORCED_ATTACHMENT_MAX_LEN = 8192
 
     def __init__(self, api_key: str | None = None, chroma_port: int = 35432) -> None:
+        self.log = logger
         self.common_oai_client = AsyncOpenAI(api_key=api_key)
         self.s2t = Transcription(self.common_oai_client)
         self.s2t_pp = TextPostProcessing(self.common_oai_client)
@@ -28,19 +31,31 @@ class LLMTools:
         user_id: UUID,
         project_id: UUID,
         attachments: list[ChatAttachment],
+        rag_attachments: list[ChatAttachment],
         user_prompt: str,
     ) -> str | None:
         short_atts: list[ChatAttachment] = []
 
-        for att in attachments:
-            if len(att.content) <= self.ATTACHMENT_MAX_LEN:
-                short_atts.append(att.content)
-                continue
-
+        async def retriever(doc_id: UUID, content: str) -> list[str]:
             if vdb_out := await self.vdb.store_and_retrieve(
-                user_id, project_id, att.id, att.content, user_prompt
+                user_id, project_id, doc_id, content, user_prompt
             ):
-                short_atts.extend(vdb_out)
+                return vdb_out
+            else:
+                self.log.info("couldn't retrieve context from vdb")
+                return []
+
+        for att in attachments:
+            if len(att.content) <= self.FORCED_ATTACHMENT_MAX_LEN:
+                short_atts.append(att.content)
+            else:
+                short_atts.extend(await retriever(att.id, att.content))
+
+        for ratt in rag_attachments:
+            if len(ratt.content) <= self.ATTACHMENT_RAG_CUTOFF_LEN:
+                short_atts.append(ratt.content)
+            else:
+                short_atts.extend(await retriever(ratt.id, ratt.content))
 
         return "\n\n".join(short_atts) if short_atts else None
 
@@ -50,9 +65,15 @@ class LLMTools:
         project_id: UUID,
         user_prompt: str,
         attachments: list[ChatAttachment] = [],
+        rag_attachments: list[ChatAttachment] = [],
         history: list[Message] = [],
     ) -> tuple[UserMessage, BotResponse] | tuple[UserMessage, None] | None:
-        """Responds to user's prompt and attached context using automatic optional RAG"""
+        """Responds to user's prompt and attached context using automatic optional RAG
+
+        Args:
+            attachments (list[ChatAttachment], optional): Attachments to preferably pass as is. Defaults to [].
+            rag_attachments (list[ChatAttachment], optional): Attachments to preferably pass through vector db. Defaults to [].
+        """
 
         user_prompt = user_prompt.strip()
 
@@ -63,7 +84,7 @@ class LLMTools:
             role="user",
             raw_text=user_prompt,
             attachment=await self._process_attachments(
-                user_id, project_id, attachments, user_prompt
+                user_id, project_id, attachments, rag_attachments, user_prompt
             ),
         )
 

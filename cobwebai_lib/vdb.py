@@ -19,6 +19,9 @@ class VectorDB:
     Embeddings stored in a collection are guaranteed to be unique (by overwriting).
     """
 
+    CHUNK_SIZE = 1024
+    CHUNK_OVERLAP = 256
+
     def __init__(
         self,
         embed_model_name: str,
@@ -39,9 +42,10 @@ class VectorDB:
             model_name=embed_model_name,
             api_key=oai_key,
         )
+
         self.splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
+            chunk_size=self.CHUNK_SIZE,
+            chunk_overlap=self.CHUNK_OVERLAP,
             add_start_index=True,
         )
 
