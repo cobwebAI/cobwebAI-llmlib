@@ -25,6 +25,7 @@ class VectorDB:
     def __init__(
         self,
         embed_model_name: str,
+        chroma_host: str,
         chroma_port: int,
         oai_key: str,
     ) -> None:
@@ -38,6 +39,7 @@ class VectorDB:
 
         self.log = logger
         self.chroma_port = chroma_port
+        self.chroma_host = chroma_host
         self.embed_model = OpenAIEmbeddingFunction(
             model_name=embed_model_name,
             api_key=oai_key,
@@ -52,7 +54,7 @@ class VectorDB:
     async def _get_or_create_chroma_collection(
         self, user_id: UUID
     ) -> tuple[AsyncClientAPI, AsyncCollection]:
-        chroma = await AsyncHttpClient(port=self.chroma_port)
+        chroma = await AsyncHttpClient(port=self.chroma_port, host=self.chroma_host)
         collection = await chroma.get_or_create_collection(
             str(user_id),
             embedding_function=self.embed_model,
@@ -64,7 +66,7 @@ class VectorDB:
         self, user_id: UUID
     ) -> tuple[AsyncClientAPI, AsyncCollection] | tuple[None, None]:
         try:
-            chroma = await AsyncHttpClient(port=self.chroma_port)
+            chroma = await AsyncHttpClient(port=self.chroma_port, host=self.chroma_host)
             collection = await chroma.get_collection(
                 str(user_id),
                 embedding_function=self.embed_model,

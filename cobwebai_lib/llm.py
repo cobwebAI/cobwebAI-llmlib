@@ -14,7 +14,7 @@ class LLMTools:
     ATTACHMENT_RAG_CUTOFF_LEN = 4096
     FORCED_ATTACHMENT_MAX_LEN = 8192
 
-    def __init__(self, api_key: str | None = None, chroma_port: int = 35432) -> None:
+    def __init__(self, api_key: str | None = None, chroma_port: int = 35432, chroma_host: str = "localhost") -> None:
         self.log = logger
         self.common_oai_client = AsyncOpenAI(api_key=api_key)
         self.s2t = Transcription(self.common_oai_client)
@@ -22,6 +22,7 @@ class LLMTools:
         self.chat = Chat(self.OAI_MODEL, oai_key=api_key)
         self.vdb = VectorDB(
             embed_model_name=self.OAI_EMBED_MODEL,
+            chroma_host=chroma_host,
             chroma_port=chroma_port,
             oai_key=api_key,
         )
