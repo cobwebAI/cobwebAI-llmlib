@@ -47,8 +47,10 @@ class Chat:
             "You are an assistant for question-answering tasks. "
             "You will be provided with somewhat reliable retrieved context to answer the questions. "
             "If you don't know the answer, just say that you don't know. "
-            "Keep the answers concise. "
-            "Respond in user's language."
+            "Keep the answers concise and in user's language. "
+            "You are advised to use GitHub Flavored Markdown. "
+            "For mathematical expressions please use Markdown LaTeX "
+            "(for inline expressions, use $...$ (e.g., $x^2 + y^2$) and for block expressions, use $$...$$)."
         )
     )
 
