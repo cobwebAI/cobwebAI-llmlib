@@ -54,7 +54,7 @@ class VectorDB:
     ) -> tuple[AsyncClientAPI, AsyncCollection]:
         chroma = await AsyncHttpClient(port=self.chroma_port)
         collection = await chroma.get_or_create_collection(
-            user_id,
+            str(user_id),
             embedding_function=self.embed_model,
         )
 
@@ -66,7 +66,7 @@ class VectorDB:
         try:
             chroma = await AsyncHttpClient(port=self.chroma_port)
             collection = await chroma.get_collection(
-                user_id,
+                str(user_id),
                 embedding_function=self.embed_model,
             )
             return (chroma, collection)
