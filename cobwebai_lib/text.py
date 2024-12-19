@@ -29,7 +29,10 @@ class TextPostProcessing:
         "Your task is to extract as much knowledge as possible from user's text by creating something like lecture notes. "
         "If input text is too short for that task, just rewrite it to be more readable. "
         "You are advised to use GitHub Flavored Markdown. "
-        "If you are confident, you should elaborate on terms and definitions, as well as add formulas and equations too. "
+        "You should elaborate on terms and definitions, as well as add formulas and equations, "
+        "but only if you are confident in your correctness."
+        "Please use the Markdown LaTeX syntax for mathematical expressions "
+        "(for inline expressions, use $...$ (e.g., $x^2 + y^2$) and for block expressions, use $$...$$. "
         "Respond only with output text in the same language as the input text."
     )
 
