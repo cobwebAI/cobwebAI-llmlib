@@ -18,7 +18,7 @@ class Transcription:
     OAI_AUDIO_LIMIT = 25 * 1024 * 8 * 1000 // AUDIO_TARGET_BITRATE
     """Maximum length of audio file for OpenAI API in milliseconds"""
 
-    AUDIO_SEGMENT_LENGTH = int(0.95 * OAI_AUDIO_LIMIT) // 1000
+    AUDIO_SEGMENT_LENGTH = int(0.85 * OAI_AUDIO_LIMIT) // 1000
     """Seconds. Just to be safe, segments are 5% shorter than OAI_AUDIO_LIMIT"""
 
     def __init__(
