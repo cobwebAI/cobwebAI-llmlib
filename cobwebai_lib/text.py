@@ -6,14 +6,13 @@ from semchunk import chunkerify
 class TextPostProcessing:
     """Corrects speech recognition mistakes in a text chunk by chunk"""
 
-    CHUNK_SIZE = 3500
+    CHUNK_SIZE = 3072
     """Text will be split in chunks each this number of tokens at max"""
 
     SYSTEM_PROMPT = (
-        "Your job is to edit chunks of text that come out of speech recognition system. "
+        "Your job is to edit chunks of text produced by speech recognition system. "
         "The most important task here is to replace misrecognized terms, abbreviations and sequences of words with correct ones. "
-        "You also need to remove text that is too off-topic and possible artifacts of speech recognition process. "
-        "You should not shorten the text more than truly necessary. "
+        "You should also remove off-topic and time-wasting text, but keep important information as complete as possible. "
         "Respond only with edited text in the same language as the input chunk."
     )
 
@@ -60,18 +59,21 @@ class TextPostProcessing:
         )
 
     async def _invoke_llm_simple(self, system_prompt: str, user_prompt: str) -> str:
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": user_prompt,
+            },
+        ]
+
         response = await self.oai_client.chat.completions.create(
             model=self.MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                },
-            ],
+            messages=messages,
+            n=1,
         )
 
         if response.choices[0].finish_reason != "stop":
@@ -104,21 +106,22 @@ class TextPostProcessing:
         if not text.strip():
             raise ValueError("no text supplied")
 
+        if theme:
+            theme = theme.strip()
+
         input_chunks = self.splitter.chunk(text)
         output_chunks: list[str] = []
 
-        for i in range(len(input_chunks)):
-            previous_processed_chunk = None if i == 0 else output_chunks[i - 1]
-            current_chunk = input_chunks[i]
+        for i, current_chunk in enumerate(input_chunks):
+            prev_chunk = output_chunks[i - 1] if i > 0 else None
 
             system_prompt = self._chunking_system_prompt(
-                prev_chunk=previous_processed_chunk,
+                prev_chunk=prev_chunk,
                 theme=(theme if theme else None),
             )
 
-            output_chunks.append(
-                await self._invoke_llm_simple(system_prompt, current_chunk)
-            )
+            output_chunk = await self._invoke_llm_simple(system_prompt, current_chunk)
+            output_chunks.append(output_chunk)
 
         return " ".join(output_chunks)
 

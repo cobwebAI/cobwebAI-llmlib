@@ -2,8 +2,9 @@ from openai import NOT_GIVEN, AsyncOpenAI
 from asyncio import create_subprocess_exec
 from aiofiles import ospath as aio_path
 from loguru import logger
-from aiofiles import tempfile
+from aiofiles import tempfile, open as aio_open
 from uuid import uuid4
+from os import path
 import os
 
 
@@ -98,16 +99,16 @@ class Transcription:
         """Transcribes a list of sequential audio segments into text segments"""
         text_segments: list[str] = []
 
-        for path in paths:
-            # TODO: make this async somehow
-            with open(path, "rb") as audio_file:
-                prompt = text_segments[-1] if text_segments else NOT_GIVEN
+        for i, full_path in enumerate(paths):
+            name = path.basename(full_path)
+            async with aio_open(full_path, "rb") as audio_file:
+                prompt = text_segments[i - 1] if i > 0 else NOT_GIVEN
 
-                self.log.debug(f"transcribing: {path}")
+                self.log.debug(f"transcribing: {full_path}")
 
                 response = await self.oai_client.audio.transcriptions.create(
                     model="whisper-1",
-                    file=audio_file,
+                    file=(name, await audio_file.read()),
                     language=language,
                     prompt=prompt,
                 )

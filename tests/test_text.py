@@ -9,13 +9,9 @@ def test_text_fix():
     output_text = asyncio.run(
         processor.fix_transcribed_text(text, theme="Лекция по машинному обучению")
     )
-    
-    output_title = asyncio.run(
-        processor.make_title(output_text)
-    )
 
     with open(f"{path}_fixed.txt", "w", encoding="utf-8") as txt_file:
-        txt_file.write(f"OUTPUT_TITLE: {output_title} \n\n {output_text}")
+        txt_file.write(output_text)
 
 
 def test_conspect():
