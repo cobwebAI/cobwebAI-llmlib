@@ -3,7 +3,7 @@ from loguru import logger
 from openai import AsyncOpenAI
 from .vdb import VectorDB
 from .audio import Transcription
-from .text import TextPostProcessing
+from .text import Test, TextPostProcessing
 from .chat import Chat, ChatAttachment, Message, UserMessage, BotResponse
 
 
@@ -14,7 +14,12 @@ class LLMTools:
     ATTACHMENT_RAG_CUTOFF_LEN = 4096
     FORCED_ATTACHMENT_MAX_LEN = 8192
 
-    def __init__(self, api_key: str | None = None, chroma_port: int = 35432, chroma_host: str = "localhost") -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        chroma_port: int = 35432,
+        chroma_host: str = "localhost",
+    ) -> None:
         self.log = logger
         self.common_oai_client = AsyncOpenAI(api_key=api_key)
         self.s2t = Transcription(self.common_oai_client)
@@ -33,11 +38,17 @@ class LLMTools:
         project_id: UUID,
         attachments: list[ChatAttachment],
         rag_attachments: list[ChatAttachment],
-        user_prompt: str,
+        user_prompt: str | None = None,
     ) -> str | None:
         short_atts: list[ChatAttachment] = []
 
+        if user_prompt:
+            user_prompt = user_prompt.strip()
+
         async def retriever(doc_id: UUID, content: str) -> list[str]:
+            if not user_prompt:
+                return []
+
             if vdb_out := await self.vdb.store_and_retrieve(
                 user_id, project_id, doc_id, content, user_prompt
             ):
@@ -120,3 +131,15 @@ class LLMTools:
         raw_text = await self.s2t.transcribe_file(path, language)
         fixed_text = await self.s2t_pp.fix_transcribed_text(raw_text, theme)
         return fixed_text
+
+    async def create_test(
+        self,
+        user_id: UUID,
+        project_id: UUID,
+        explanation: str | None = None,
+        attachments: list[ChatAttachment] = [],
+    ) -> Test:
+        context = await self._process_attachments(
+            user_id, project_id, attachments, user_prompt=explanation
+        )
+        return await self.s2t_pp.make_test(context, explanation)

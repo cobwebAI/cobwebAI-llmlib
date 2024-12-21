@@ -30,15 +30,6 @@ class ChatAttachment:
 type BotResponse = Message
 type UserMessage = Message
 
-# class Question(TypedDict):
-#     """Test question and answer variants."""
-
-#     question: Annotated[str, ..., "Test question"]
-#     varinant_a: Annotated[str, ..., "Answer variant A"]
-#     varinant_b: Annotated[str, ..., "Answer variant B"]
-#     varinant_c: Annotated[str, ..., "Answer variant C"]
-#     varinant_d: Annotated[str, ..., "Answer variant D"]
-
 
 class Chat:
 
@@ -122,6 +113,3 @@ class Chat:
                 self.log.error(f"Failed to invoke chat: {e}")
 
         return None
-
-    # async def invoke_test_generation(self) -> list[Question]:
-    #     self.chat.with_structured_output(Question, strict=True)

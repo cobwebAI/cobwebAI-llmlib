@@ -1,6 +1,20 @@
+from typing import Type
 from loguru import logger
-from openai import AsyncOpenAI
+from openai import NOT_GIVEN, AsyncOpenAI
 from semchunk import chunkerify
+from pydantic import BaseModel
+
+
+class Question(BaseModel):
+    question: str
+    correct_answer: str
+    incorrect_answers: list[str]
+    correct_answer_explanation: str
+
+
+class Test(BaseModel):
+    test_name: str
+    questions: list[Question]
 
 
 class TextPostProcessing:
@@ -41,6 +55,22 @@ class TextPostProcessing:
         "Respond only with a title in the same language as the input text."
     )
 
+    TEST_PROMPT = (
+        "You will be given a text (or multiple texts) by user. "
+        "You need to create a multiple choice test to asses the user's knowledge of text's1 contents.\n"
+        "The schema of the test will be provided to you, and it will have the following parameters:\n"
+        "- test_name: An apporpriate name for the test;\n"
+        "- questions: List of objects of type Question, make as much of them as possible.\n"
+        "The Question object has the following schema:\n"
+        "- question: A string representing a question itself;\n"
+        "- correct_answer: Correct answer to the question;\n"
+        "- incorrect_answers: List of incorrect answers, it's length is at least 2 and at max 4;\n"
+        "- correct_answer_explanation: Explanation on why the correct_answer is correct and incorrect_answers are not.\n"
+        "Respond only accroding to schema."
+    )
+
+    TEST_EXPLANATION_PROMPT = 'Additionally, user provided someting to guide you in writing a test: """\n{explanation}\n"""'
+
     MODEL = "gpt-4o-mini"
 
     def __init__(
@@ -71,9 +101,7 @@ class TextPostProcessing:
         ]
 
         response = await self.oai_client.chat.completions.create(
-            model=self.MODEL,
-            messages=messages,
-            n=1,
+            model=self.MODEL, messages=messages, n=1
         )
 
         if response.choices[0].finish_reason != "stop":
@@ -82,6 +110,34 @@ class TextPostProcessing:
             raise RuntimeError("text processing: model refusal")
 
         return response.choices[0].message.content
+
+    async def _invoke_llm_parsed(
+        self, system_prompt: str, user_prompt: str, resp_format: Type[BaseModel]
+    ) -> Type[BaseModel]:
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": user_prompt,
+            },
+        ]
+
+        response = await self.oai_client.beta.chat.completions.parse(
+            model=self.MODEL, messages=messages, n=1, response_format=resp_format
+        )
+
+        if response.choices[0].finish_reason != "stop":
+            raise RuntimeError("test creation: unsuccessfull generation")
+        elif response.choices[0].message.refusal:
+            raise RuntimeError("test creation: model refusal")
+
+        if output := response.choices[0].message.parsed:
+            return output
+
+        raise RuntimeError("test creation: failed to parse response")
 
     def _chunking_system_prompt(
         self,
@@ -154,3 +210,21 @@ class TextPostProcessing:
         self.log.debug(f"creating title for a text")
 
         return await self._invoke_llm_simple(self.NAMING_PROMPT, text.strip())
+
+    async def make_test(self, context: str, explanation: str | None = None) -> Test:
+        self.log.debug(f"creating a test")
+
+        system_prompt = "\n\n".join(
+            [
+                self.TEST_PROMPT,
+                (
+                    self.TEST_EXPLANATION_PROMPT.format(explanation=explanation)
+                    if explanation
+                    else ""
+                ),
+            ]
+        )
+
+        return await self._invoke_llm_parsed(
+            system_prompt=system_prompt, user_prompt=context, resp_format=Test
+        )
