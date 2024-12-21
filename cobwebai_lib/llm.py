@@ -140,6 +140,6 @@ class LLMTools:
         attachments: list[ChatAttachment] = [],
     ) -> Test:
         context = await self._process_attachments(
-            user_id, project_id, attachments, user_prompt=explanation
+            user_id, project_id, attachments, rag_attachments=[], user_prompt=explanation
         )
         return await self.s2t_pp.make_test(context, explanation)
