@@ -20,7 +20,7 @@ def test_conspect():
     text = open(path, encoding="utf-8").read()
     processor = TextPostProcessing()
     output_text = asyncio.run(
-        processor.create_conspect(text, theme="Лекция по машинному обучению")
+        processor.create_conspect_multi([text], instructions="Лекция по машинному обучению")
     )
 
     output_title = asyncio.run(processor.make_title(output_text))
@@ -32,10 +32,9 @@ def test_conspect():
 def test_create_test():
     path = "assets/ai_lecture_3_fixed_chunk3072.txt_conspect.txt"
     text = open(path, encoding="utf-8").read()
-    uid = UUID(int=0x12345678123456781234567812345678)
     processor = TextPostProcessing()
 
-    output: Test = asyncio.run(processor.make_test(text, "Не включай в тест вопросы на историю."))
+    output: Test = asyncio.run(processor.make_test([text], "Не включай в тест вопросы про библиотеки."))
     assert output != None
 
     print(output.test_name)

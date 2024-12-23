@@ -34,42 +34,80 @@ class TextPostProcessing:
 
     PREV_CHUNK_PROMPT = 'The previous chunk was already done for you: """\n{chunk}\n"""'
 
-    CONSPECT_SYSTEM_PROMPT = (
-        "Your task is to extract as much knowledge as possible from user's text by creating something like lecture notes. "
-        "If input text is too short for that task, just rewrite it to be more readable. "
-        "You are advised to use GitHub Flavored Markdown. "
-        "You should elaborate on terms and definitions, as well as add formulas and equations, "
-        "but only if you are confident in your correctness."
-        "Please use the Markdown LaTeX syntax for mathematical expressions "
-        "(for inline expressions, use $...$ (e.g., $x^2 + y^2$) and for block expressions, use $$...$$). "
-        "Respond only with output text in the same language as the input text."
-    )
+    CONSPECT_SYSTEM_PROMPT = """\
+You are tasked with examining files and generating concise, well-organized summaries based on their content. Follow these 
+instructions carefully:
+1. Here are the contents of the files to be summarized:
+{contents}
 
-    MULTITEXT_PROMPT = (
-        'Mutliple texts are supplied, separated for your convenience by "==TEXT SEPARATOR==", '
-        "take that into consideration when writing headings."
-    )
+2. Your task is to create a summary of the information contained in these files. As you summarize:
+   - Focus on the main ideas and key points
+   - Organize the information in a logical and coherent manner
+   - Be concise while ensuring all important details are included
+   - If there are multiple files, identify common themes or connections between them
+   - You should elaborate on terms and definitions, as well as add formulas and equations
+
+3. The user has provided the following specific instructions for summarizing:
+<user_instructions>
+{user_instructions}
+</user_instructions>
+Please incorporate these instructions into your summarization process if they are not empty.
+
+4. Format your output using markdown. For mathematical expressions:
+   - Use $...$ for inline expressions (e.g., $x^2 + y^2$)
+   - Use $$...$$ for block expressions
+
+5. Ensure that your summary is well-structured, using appropriate markdown headers, lists, and other formatting as needed to enhance readability.
+
+6. Respond only with your summary in the same language as the input text.
+"""
 
     NAMING_PROMPT = (
         "You task is to create an appropriate descriptive title of the text provided by user. "
         "Respond only with a title in the same language as the input text."
     )
 
-    TEST_PROMPT = (
-        "You will be given a text (or multiple texts) by user. "
-        "You need to create a multiple choice test to asses the user's knowledge of text's1 contents.\n"
-        "The schema of the test will be provided to you, and it will have the following parameters:\n"
-        "- test_name: An apporpriate name for the test;\n"
-        "- questions: List of objects of type Question, make as much of them as possible.\n"
-        "The Question object has the following schema:\n"
-        "- question: A string representing a question itself;\n"
-        "- correct_answer: Correct answer to the question;\n"
-        "- incorrect_answers: List of incorrect answers, it's length is at least 2 and at max 4;\n"
-        "- correct_answer_explanation: Explanation on why the correct_answer is correct and incorrect_answers are not.\n"
-        "Respond only accroding to schema."
-    )
+    TEST_PROMPT = """\
+You are tasked with creating a multiple-choice test based on the content of a given text/texts. \
+Your goal is to assess the user's knowledge and understanding of the text's contents. Here's what you'll be working with:
+{contents}
 
-    TEST_EXPLANATION_PROMPT = 'Additionally, user provided someting to guide you in writing a test: """\n{explanation}\n"""'
+The user has also provided the following to guide you in test creation:
+<user_instructions>
+{user_instructions}
+</user_instructions>
+
+Please follow these instructions to create the multiple-choice test:
+
+1. Carefully read and analyze the provided text/texts.
+
+2. Create a name for a test that accurately reflects the content of the text and the nature of the test.
+
+3. Generate as many questions as possible based on the text. Each question should:
+   a. Be clear and concise
+   b. Test understanding of key concepts, facts, or ideas from the text
+   c. Have one correct answer and 2-4 incorrect answers
+   d. Include an explanation for why the correct answer is right and why the incorrect answers are wrong
+
+4. Ensure that your questions cover a variety of topics from the text and use different types of questions (e.g., factual recall, inference, application of concepts).
+
+5. Avoid creating questions that are too similar to each other or that give away answers to other questions.
+
+6. Make sure that the incorrect answers are plausible but clearly incorrect when compared to the text.
+
+7. Write clear and informative explanations for each correct answer, referencing specific parts of the text where applicable.
+
+8. Format your output strictly according to the provided schema. Do not include any additional information or explanations outside of the schema structure.
+
+Provided schema:
+- test_name: An apporpriate name for the test;
+- questions: List of objects of type Question.
+The Question object has the following schema:
+- question: A string representing a question itself;
+- correct_answer: Correct answer to the question;
+- incorrect_answers: List of incorrect answers;
+- correct_answer_explanation: Explanation on why the correct_answer is correct and incorrect_answers are not.
+"""
 
     MODEL = "gpt-4o-mini"
 
@@ -88,18 +126,7 @@ class TextPostProcessing:
             self.MODEL, chunk_size=self.CHUNK_SIZE, memoize=False
         )
 
-    async def _invoke_llm_simple(self, system_prompt: str, user_prompt: str) -> str:
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt,
-            },
-            {
-                "role": "user",
-                "content": user_prompt,
-            },
-        ]
-
+    async def _invoke_llm_simple(self, messages: list[dict[str, str]]) -> str:
         response = await self.oai_client.chat.completions.create(
             model=self.MODEL, messages=messages, n=1
         )
@@ -112,19 +139,8 @@ class TextPostProcessing:
         return response.choices[0].message.content
 
     async def _invoke_llm_parsed(
-        self, system_prompt: str, user_prompt: str, resp_format: Type[BaseModel]
+        self, messages: list[dict[str, str]], resp_format: Type[BaseModel]
     ) -> Type[BaseModel]:
-        messages = [
-            {
-                "role": "system",
-                "content": system_prompt,
-            },
-            {
-                "role": "user",
-                "content": user_prompt,
-            },
-        ]
-
         response = await self.oai_client.beta.chat.completions.parse(
             model=self.MODEL, messages=messages, n=1, response_format=resp_format
         )
@@ -176,55 +192,75 @@ class TextPostProcessing:
                 theme=(theme if theme else None),
             )
 
-            output_chunk = await self._invoke_llm_simple(system_prompt, current_chunk)
+            messages = [
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": current_chunk,
+                },
+            ]
+
+            output_chunk = await self._invoke_llm_simple(messages)
             output_chunks.append(output_chunk)
 
         return " ".join(output_chunks)
 
     async def create_conspect_multi(
-        self, texts: list[str], theme: str | None = None
+        self, texts: list[str], instructions: str | None = None
     ) -> str:
         """Creates an outline from input text"""
 
-        self.log.debug(f"outlining multiple texts: {theme if theme else "no theme"}")
+        self.log.debug(f"outlining text(s)")
 
         if not texts:
             return ValueError("no files supplied")
 
-        system_prompt = (
-            f"{self.CONSPECT_SYSTEM_PROMPT}/n{self.THEME_PROMPT.format(theme=theme)}/n"
-            if theme
-            else self.CONSPECT_SYSTEM_PROMPT
+        contents = "\n".join(
+            map(lambda x: f"<file_contents>\n{x.strip()}\n</file_contents>", texts)
         )
 
-        if len(texts) > 1:
-            system_prompt += self.MULTITEXT_PROMPT
+        user_instructions = (
+            instructions if instructions else "No instructions provided."
+        )
 
-        text = "\n\n==TEXT SEPARATOR==\n\n".join(map(lambda x: x.strip(), texts))
+        prompt = self.CONSPECT_SYSTEM_PROMPT.format(
+            contents=contents, user_instructions=user_instructions
+        )
 
-        return await self._invoke_llm_simple(system_prompt, text)
+        return await self._invoke_llm_simple([{"role": "user", "content": prompt}])
 
     async def make_title(self, text: str) -> str:
         """Creates a title for input text"""
 
         self.log.debug(f"creating title for a text")
 
-        return await self._invoke_llm_simple(self.NAMING_PROMPT, text.strip())
+        messages = [
+            {
+                "role": "system",
+                "content": self.NAMING_PROMPT,
+            },
+            {
+                "role": "user",
+                "content": text.strip(),
+            },
+        ]
 
-    async def make_test(self, context: str, explanation: str | None = None) -> Test:
+        return await self._invoke_llm_simple(messages)
+
+    async def make_test(
+        self, contents: list[str], explanation: str | None = None
+    ) -> Test:
         self.log.debug(f"creating a test")
 
-        system_prompt = "\n\n".join(
-            [
-                self.TEST_PROMPT,
-                (
-                    self.TEST_EXPLANATION_PROMPT.format(explanation=explanation)
-                    if explanation
-                    else ""
-                ),
-            ]
+        contents = "\n".join(map(lambda x: f"<text>\n{x.strip()}\n</text>", contents))
+
+        prompt = self.TEST_PROMPT.format(
+            contents=contents, user_instructions=explanation
         )
 
         return await self._invoke_llm_parsed(
-            system_prompt=system_prompt, user_prompt=context, resp_format=Test
+            [{"role": "user", "content": prompt}], resp_format=Test
         )

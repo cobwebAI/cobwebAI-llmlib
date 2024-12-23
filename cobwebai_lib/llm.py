@@ -1,6 +1,7 @@
 from uuid import UUID
 from loguru import logger
 from openai import AsyncOpenAI
+import tiktoken
 from .vdb import VectorDB
 from .audio import Transcription
 from .text import Test, TextPostProcessing
@@ -10,9 +11,12 @@ from .chat import Chat, ChatAttachment, Message, UserMessage, BotResponse
 class LLMTools:
     OAI_MODEL = "gpt-4o-mini"
     OAI_EMBED_MODEL = "text-embedding-ada-002"
+    OAI_TOKENIZER = "o200k_base"
+    OAI_CONTEXT_TOKEN_LIMIT = 32768
 
     ATTACHMENT_RAG_CUTOFF_LEN = 4096
     FORCED_ATTACHMENT_MAX_LEN = 8192
+    MAX_LEN_FOR_TEST = 30000
 
     def __init__(
         self,
@@ -25,6 +29,7 @@ class LLMTools:
         self.s2t = Transcription(self.common_oai_client)
         self.s2t_pp = TextPostProcessing(self.common_oai_client)
         self.chat = Chat(self.OAI_MODEL, oai_key=api_key)
+        self.tokenizer = tiktoken.get_encoding(self.OAI_TOKENIZER)
         self.vdb = VectorDB(
             embed_model_name=self.OAI_EMBED_MODEL,
             chroma_host=chroma_host,
@@ -132,6 +137,23 @@ class LLMTools:
         fixed_text = await self.s2t_pp.fix_transcribed_text(raw_text, theme)
         return fixed_text
 
+    async def _process_attachments_for_test(
+        self, attachments: list[ChatAttachment]
+    ) -> list[str]:
+        output = []
+        output_length = 0
+
+        for attachment in attachments:
+            tokens = self.tokenizer.encode(attachment.content)
+            output_length += len(tokens)
+            output.append(attachment.content)
+
+            if output_length > self.OAI_CONTEXT_TOKEN_LIMIT:
+                raise ValueError(
+                    "attachments together exceeded specified context length"
+                )
+        return output
+
     async def create_test(
         self,
         user_id: UUID,
@@ -139,7 +161,5 @@ class LLMTools:
         explanation: str | None = None,
         attachments: list[ChatAttachment] = [],
     ) -> Test:
-        context = await self._process_attachments(
-            user_id, project_id, attachments, rag_attachments=[], user_prompt=explanation
-        )
+        context = await self._process_attachments_for_test(attachments)
         return await self.s2t_pp.make_test(context, explanation)
