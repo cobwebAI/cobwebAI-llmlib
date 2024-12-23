@@ -23,10 +23,20 @@ class TextPostProcessing:
     CHUNK_SIZE = 3072
     """Text will be split in chunks each this number of tokens at max"""
 
-    SYSTEM_PROMPT = (
+    AUDIO_FIX_PROMPT = (
         "Your job is to edit chunks of text produced by speech recognition system. "
         "The most important task here is to replace misrecognized terms, abbreviations and sequences of words with correct ones. "
         "You should also remove off-topic and time-wasting text, but keep important information as complete as possible. "
+        "Respond only with edited text in the same language as the input chunk."
+    )
+
+    TEXT_FIX_PROMPT = (
+        "Your job is to edit chunks of text produced by OCR system. "
+        "The most important task here is to replace what is left of original markup with Markdown. "
+        "You must keep important information as complete as possible. "
+        "Try to restore mathematical expressions and write them as follows:\n"
+        "    - Use $...$ for inline expressions (e.g., $x^2 + y^2$)\n"
+        "    - Use $$...$$ for block expressions\n"
         "Respond only with edited text in the same language as the input chunk."
     )
 
@@ -161,18 +171,21 @@ The Question object has the following schema:
         self,
         prev_chunk: str | None = None,
         theme: str | None = None,
+        from_text: bool = False,
     ) -> str:
         """Instantiates system prompt template with supplied info"""
 
         return "\n".join(
             [
-                self.SYSTEM_PROMPT,
+                self.TEXT_FIX_PROMPT if from_text else self.AUDIO_FIX_PROMPT,
                 self.THEME_PROMPT.format(theme=theme) if theme else "",
                 self.PREV_CHUNK_PROMPT.format(chunk=prev_chunk) if prev_chunk else "",
             ]
         )
 
-    async def fix_transcribed_text(self, text: str, theme: str | None = None) -> str:
+    async def fix_transcribed_text(
+        self, text: str, theme: str | None = None, from_text: bool = False
+    ) -> str:
         """Post-processes supplied text"""
 
         self.log.debug(f"post-processing text: {theme if theme else "no theme"}")
@@ -192,6 +205,7 @@ The Question object has the following schema:
             system_prompt = self._chunking_system_prompt(
                 prev_chunk=prev_chunk,
                 theme=(theme if theme else None),
+                from_text=from_text,
             )
 
             messages = [
