@@ -99,6 +99,8 @@ Please follow these instructions to create the multiple-choice test:
 
 8. Format your output strictly according to the provided schema. Do not include any additional information or explanations outside of the schema structure.
 
+9. Test must be in the same language as the input text.
+
 Provided schema:
 - test_name: An apporpriate name for the test;
 - questions: List of objects of type Question.
