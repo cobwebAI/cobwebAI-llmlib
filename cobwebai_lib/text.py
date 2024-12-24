@@ -121,7 +121,7 @@ The Question object has the following schema:
 - correct_answer_explanation: Explanation on why the correct_answer is correct and incorrect_answers are not.
 """
 
-    MODEL = "gpt-4o-mini"
+    CHUNKED_MODEL = "gpt-4o-mini"
 
     def __init__(
         self,
@@ -135,12 +135,17 @@ The Question object has the following schema:
 
         # Shoud I disable memoization here?
         self.splitter = chunkerify(
-            self.MODEL, chunk_size=self.CHUNK_SIZE, memoize=False
+            self.CHUNKED_MODEL, chunk_size=self.CHUNK_SIZE, memoize=False
         )
 
-    async def _invoke_llm_simple(self, messages: list[dict[str, str]]) -> str:
+    async def _invoke_llm_simple(
+        self, messages: list[dict[str, str]], model: str | None = None
+    ) -> str:
+        if not model:
+            model = self.CHUNKED_MODEL
+
         response = await self.oai_client.chat.completions.create(
-            model=self.MODEL, messages=messages, n=1
+            model=model, messages=messages, n=1
         )
 
         if response.choices[0].finish_reason != "stop":
@@ -151,10 +156,16 @@ The Question object has the following schema:
         return response.choices[0].message.content
 
     async def _invoke_llm_parsed(
-        self, messages: list[dict[str, str]], resp_format: Type[BaseModel]
+        self,
+        messages: list[dict[str, str]],
+        resp_format: Type[BaseModel],
+        model: str | None = None,
     ) -> Type[BaseModel]:
+        if not model:
+            model = self.CHUNKED_MODEL
+
         response = await self.oai_client.beta.chat.completions.parse(
-            model=self.MODEL, messages=messages, n=1, response_format=resp_format
+            model=model, messages=messages, n=1, response_format=resp_format
         )
 
         if response.choices[0].finish_reason != "stop":
@@ -246,7 +257,9 @@ The Question object has the following schema:
             contents=contents, user_instructions=user_instructions
         )
 
-        return await self._invoke_llm_simple([{"role": "user", "content": prompt}])
+        return await self._invoke_llm_simple(
+            [{"role": "user", "content": prompt}], model="gpt-4o"
+        )
 
     async def make_title(self, text: str) -> str:
         """Creates a title for input text"""
@@ -278,5 +291,5 @@ The Question object has the following schema:
         )
 
         return await self._invoke_llm_parsed(
-            [{"role": "user", "content": prompt}], resp_format=Test
+            [{"role": "user", "content": prompt}], resp_format=Test, model="gpt-4o"
         )

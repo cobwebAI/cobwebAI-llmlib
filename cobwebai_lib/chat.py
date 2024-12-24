@@ -52,7 +52,7 @@ class Chat:
         "{user_input}"
     )
 
-    def __init__(self, model: str = "gpt-4o-mini", oai_key: str | None = None) -> None:
+    def __init__(self, model: str = "gpt-4o", oai_key: str | None = None) -> None:
 
         self.log = logger
         self.chat = ChatOpenAI(

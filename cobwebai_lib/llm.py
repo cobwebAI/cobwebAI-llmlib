@@ -9,7 +9,7 @@ from .chat import Chat, ChatAttachment, Message, UserMessage, BotResponse
 
 
 class LLMTools:
-    OAI_MODEL = "gpt-4o-mini"
+    OAI_CHAT_MODEL = "gpt-4o"
     OAI_EMBED_MODEL = "text-embedding-ada-002"
     OAI_TOKENIZER = "o200k_base"
     OAI_CONTEXT_TOKEN_LIMIT = 32768
@@ -28,7 +28,7 @@ class LLMTools:
         self.common_oai_client = AsyncOpenAI(api_key=api_key)
         self.s2t = Transcription(self.common_oai_client)
         self.s2t_pp = TextPostProcessing(self.common_oai_client)
-        self.chat = Chat(self.OAI_MODEL, oai_key=api_key)
+        self.chat = Chat(self.OAI_CHAT_MODEL, oai_key=api_key)
         self.tokenizer = tiktoken.get_encoding(self.OAI_TOKENIZER)
         self.vdb = VectorDB(
             embed_model_name=self.OAI_EMBED_MODEL,
