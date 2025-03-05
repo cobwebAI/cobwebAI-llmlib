@@ -1,23 +1,23 @@
 [tool.poetry]
 name = "cobwebai-lib"
-version = "0.1.6"
+version = "0.1.7a"
 description = ""
 authors = ["SERGEYDJUM <39106181+SERGEYDJUM@users.noreply.github.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-langchain = "^0.3.13"
-langchain-openai = "^0.2.14"
-langchain-chroma = "^0.1.4"
-openai = "^1.58.1"
+langchain = "^0.3.20"
+langchain-openai = "^0.3.7"
+langchain-chroma = "^0.2.2"
+openai = "^1.65.3"
 aiofiles = "^24.1.0"
-semchunk = "^2.2.2"
-tiktoken = "^0.8.0"
+semchunk = "^3.1.1"
+tiktoken = "^0.9.0"
 loguru = "^0.7.3"
 
 [tool.poetry.group.test.dependencies]  
-pytest = "^8.3.4"  
+pytest = "^8.3.5"  
 
 [build-system]
 requires = ["poetry-core"]
