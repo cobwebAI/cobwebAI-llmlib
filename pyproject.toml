@@ -15,6 +15,7 @@ aiofiles = "^24.1.0"
 semchunk = "^3.1.1"
 tiktoken = "^0.9.0"
 loguru = "^0.7.3"
+assemblyai = "^0.37.0"
 
 [tool.poetry.group.test.dependencies]  
 pytest = "^8.3.5"  

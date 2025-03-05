@@ -23,10 +23,11 @@ class LLMTools:
         api_key: str | None = None,
         chroma_port: int = 35432,
         chroma_host: str = "localhost",
+        force_whisper: bool = False,
     ) -> None:
         self.log = logger
         self.common_oai_client = AsyncOpenAI(api_key=api_key)
-        self.s2t = Transcription(self.common_oai_client)
+        self.s2t = Transcription(self.common_oai_client if force_whisper else None)
         self.s2t_pp = TextPostProcessing(self.common_oai_client)
         self.chat = Chat(self.OAI_CHAT_MODEL, oai_key=api_key)
         self.tokenizer = tiktoken.get_encoding(self.OAI_TOKENIZER)
