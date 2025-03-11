@@ -28,6 +28,7 @@ class Transcription:
     def __init__(
         self,
         client: AsyncOpenAI | aai.Client | None = None,
+        force_oai: bool = False,
         _temp_dir: str | None = None,
         **kwargs,
     ) -> None:
@@ -41,7 +42,7 @@ class Transcription:
 
         if client:
             self.client = client
-        elif os.getenv("assemblyai_api_key"):
+        elif not force_oai:
             self.client = aai.Client(settings=aai.settings)
         else:
             self.client = AsyncOpenAI(**kwargs)

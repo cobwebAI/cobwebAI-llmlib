@@ -1,15 +1,20 @@
 from uuid import UUID
 from loguru import logger
 from openai import AsyncOpenAI
+from anthropic import AsyncAnthropic
 import tiktoken
 from .vdb import VectorDB
 from .audio import Transcription
 from .text import Test, TextPostProcessing
-from .chat import Chat, ChatAttachment, Message, UserMessage, BotResponse
+from .chat import Chat, ChatAttachment, Message
+
+type BotResponse = Message
+type UserMessage = Message
 
 
 class LLMTools:
-    OAI_CHAT_MODEL = "gpt-4o"
+    CHAT_MODEL = "claude-3-7-sonnet-latest"
+
     OAI_EMBED_MODEL = "text-embedding-ada-002"
     OAI_TOKENIZER = "o200k_base"
     OAI_CONTEXT_TOKEN_LIMIT = 32768
@@ -20,22 +25,29 @@ class LLMTools:
 
     def __init__(
         self,
-        api_key: str | None = None,
+        oai_api_key: str | None = None,
         chroma_port: int = 35432,
         chroma_host: str = "localhost",
-        force_whisper: bool = False,
+        force_openai: bool = False,
     ) -> None:
         self.log = logger
-        self.common_oai_client = AsyncOpenAI(api_key=api_key)
-        self.s2t = Transcription(self.common_oai_client if force_whisper else None)
-        self.s2t_pp = TextPostProcessing(self.common_oai_client)
-        self.chat = Chat(self.OAI_CHAT_MODEL, oai_key=api_key)
         self.tokenizer = tiktoken.get_encoding(self.OAI_TOKENIZER)
+        self.oai_client = AsyncOpenAI()
+        self.anth_client = AsyncAnthropic()
+
+        self.s2t = Transcription(self.oai_client if force_openai else None)
+
+        self.s2t_pp = TextPostProcessing(
+            self.oai_client if force_openai else self.anth_client
+        )
+
+        self.chat = Chat(self.CHAT_MODEL)
+
         self.vdb = VectorDB(
             embed_model_name=self.OAI_EMBED_MODEL,
             chroma_host=chroma_host,
             chroma_port=chroma_port,
-            oai_key=api_key,
+            oai_key=oai_api_key,
         )
 
     async def _process_attachments(

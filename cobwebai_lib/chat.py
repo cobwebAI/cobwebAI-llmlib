@@ -1,24 +1,12 @@
 from os import environ
-from typing import Iterable
 from uuid import UUID
 from loguru import logger
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_openai import ChatOpenAI
-from enum import StrEnum
+from langchain_anthropic import ChatAnthropic
 from dataclasses import dataclass
-from typing_extensions import Annotated, TypedDict
-
-
-class ChatRole(StrEnum):
-    USER = "user"
-    BOT = "bot"
-
-
-@dataclass
-class Message:
-    role: ChatRole
-    raw_text: str
-    attachment: str | None
+from .models import Role, Message
+from .prompts import CHAT_SYS_PROMPT
 
 
 @dataclass
@@ -27,24 +15,7 @@ class ChatAttachment:
     content: str
 
 
-type BotResponse = Message
-type UserMessage = Message
-
-
 class Chat:
-
-    SYS_MSG = SystemMessage(
-        (
-            "You are an assistant for question-answering tasks. "
-            "You will be provided with somewhat reliable retrieved context to answer the questions. "
-            "If you don't know the answer, just say that you don't know. "
-            "Keep the answers concise and in user's language. "
-            "You are advised to use GitHub Flavored Markdown. "
-            "For mathematical expressions please use Markdown LaTeX "
-            "(for inline expressions, use $...$ (e.g., $x^2 + y^2$) and for block expressions, use $$...$$)."
-        )
-    )
-
     CONTEXTUAL_PROMPT = (
         "You are provided with a part of context: "
         '"""\n{context}\n"""\n\n'
@@ -52,18 +23,21 @@ class Chat:
         "{user_input}"
     )
 
-    def __init__(self, model: str = "gpt-4o", oai_key: str | None = None) -> None:
+    def __init__(self, model: str = "claude-3-7-sonnet-latest") -> None:
 
         self.log = logger
-        self.chat = ChatOpenAI(
-            model=model, api_key=(oai_key if oai_key else environ["OPENAI_API_KEY"])
-        )
+        self.sys_msg = SystemMessage(CHAT_SYS_PROMPT)
+
+        if model.startswith("gpt"):
+            self.chat = ChatOpenAI(model=model)
+        else:
+            self.chat = ChatAnthropic(model=model)
 
     def _cast_user_msg(self, message: Message) -> list[HumanMessage]:
         user_input = message.raw_text.strip()
         context = message.attachment.strip() if message.attachment else None
 
-        if not user_input or message.role != ChatRole.USER:
+        if not user_input or message.role != Role.USER:
             self.log.warning(f"{message} does not contain text or has a wrong role")
             return []
 
@@ -87,9 +61,9 @@ class Chat:
         output = []
 
         for message in messages:
-            if message.role == ChatRole.BOT:
+            if message.role == Role.BOT:
                 output.append(AIMessage(message.raw_text))
-            elif message.role == ChatRole.USER:
+            elif message.role == Role.USER:
                 output.extend(self._cast_user_msg(message))
             else:
                 raise ValueError("Unknow message role")
@@ -102,13 +76,13 @@ class Chat:
         history: list[Message] = [],
     ) -> Message | None:
         if user_message := self._cast_user_msg(message):
-            history_actual = [self.SYS_MSG]
+            history_actual = [self.sys_msg]
             history_actual.extend(self._cast_messages(history))
             history_actual.extend(user_message)
 
             try:
                 response = await self.chat.ainvoke(history_actual)
-                return Message("bot", str(response.content), attachment=None)
+                return Message(Role.BOT, str(response.content))
             except Exception as e:
                 self.log.error(f"Failed to invoke chat: {e}")
 
