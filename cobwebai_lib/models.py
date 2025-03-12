@@ -128,7 +128,7 @@ class AnthModel(LanguageModel):
             model=self.MODEL if not quality_mode else self.QUALITY_MODEL,
             system=sys_prompt if sys_prompt else NOT_GIVEN,
         ) as stream:
-            response = stream.get_final_message()
+            response = await stream.get_final_message()
 
         return response.content[0].text
 
@@ -157,6 +157,6 @@ class AnthModel(LanguageModel):
                 }
             ],
         ) as stream:
-            response = stream.get_final_message()
+            response = await stream.get_final_message()
 
         return Schema(**response.content[1].input)
