@@ -104,7 +104,7 @@ class TextPostProcessing:
     ) -> str:
         """Post-processes supplied text"""
 
-        if isinstance(self.model, OAIModel):
+        if self.model.CLS_MARKER == OAIModel.CLS_MARKER:
             return await self.fix_transcribed_text_chunked(text, theme, from_text)
 
         self.log.debug(f"post-processing text: T={theme=}, M={from_text=}")

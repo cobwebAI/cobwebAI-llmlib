@@ -23,6 +23,8 @@ class Message:
 
 
 class LanguageModel(ABC):
+    CLS_MARKER = 0
+
     @abstractmethod
     def invoke_simple(self, messages: list[Message], quality_mode: bool = False) -> str:
         pass
@@ -51,6 +53,7 @@ class LanguageModel(ABC):
 
 
 class OAIModel(LanguageModel):
+    CLS_MARKER = 1
     MODEL = "gpt-4o-mini"
     QUALITY_MODEL = "gpt-4o"
 
@@ -99,6 +102,7 @@ class OAIModel(LanguageModel):
 
 
 class AnthModel(LanguageModel):
+    CLS_MARKER = 2
     MODEL = "claude-3-7-sonnet-latest"
     QUALITY_MODEL = MODEL
     MAX_TOKENS = 32 * 1024
