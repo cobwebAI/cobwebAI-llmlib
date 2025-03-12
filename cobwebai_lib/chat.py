@@ -34,7 +34,7 @@ class Chat:
             self.chat = ChatAnthropic(model=model)
 
     def _cast_user_msg(self, message: Message) -> list[HumanMessage]:
-        user_input = message.raw_text.strip()
+        user_input = message.content.strip()
         context = message.attachment.strip() if message.attachment else None
 
         if not user_input or message.role != Role.USER:
@@ -62,7 +62,7 @@ class Chat:
 
         for message in messages:
             if message.role == Role.BOT:
-                output.append(AIMessage(message.raw_text))
+                output.append(AIMessage(message.content))
             elif message.role == Role.USER:
                 output.extend(self._cast_user_msg(message))
             else:

@@ -112,7 +112,7 @@ class LLMTools:
 
         user_msg = Message(
             role="user",
-            raw_text=user_prompt,
+            content=user_prompt,
             attachment=await self._process_attachments(
                 user_id, project_id, attachments, rag_attachments, user_prompt
             ),
