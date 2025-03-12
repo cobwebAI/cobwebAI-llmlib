@@ -139,6 +139,8 @@ class AnthModel(LanguageModel):
         quality_mode: bool = False,
     ) -> BaseModel:
         sys_prompt, messages = self._strip_system(messages)
+
+        sys_prompt = sys_prompt if sys_prompt else ""
         sys_prompt += self.tool_use_reminder
 
         response = None
