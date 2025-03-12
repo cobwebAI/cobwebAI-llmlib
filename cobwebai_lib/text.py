@@ -48,7 +48,7 @@ class TextPostProcessing:
             self.CHUNKERIFY_MODEL_HINT, chunk_size=self.CHUNK_SIZE, memoize=False
         )
 
-    def _chunking_system_prompt(
+    def _fix_transcribed_prompt(
         self,
         prev_chunk: str | None = None,
         theme: str | None = None,
@@ -64,7 +64,7 @@ class TextPostProcessing:
             ]
         )
 
-    async def fix_transcribed_text(
+    async def fix_transcribed_text_chunked(
         self, text: str, theme: str | None = None, from_text: bool = False
     ) -> str:
         """Post-processes supplied text"""
@@ -83,7 +83,7 @@ class TextPostProcessing:
         for i, current_chunk in enumerate(input_chunks):
             prev_chunk = output_chunks[i - 1] if i > 0 else None
 
-            system_prompt = self._chunking_system_prompt(
+            system_prompt = self._fix_transcribed_prompt(
                 prev_chunk=prev_chunk,
                 theme=(theme if theme else None),
                 from_text=from_text,
@@ -99,6 +99,32 @@ class TextPostProcessing:
 
         return " ".join(output_chunks)
 
+    async def fix_transcribed_text(
+        self, text: str, theme: str | None = None, from_text: bool = False
+    ) -> str:
+        """Post-processes supplied text"""
+
+        if isinstance(self.model, OAIModel):
+            return await self.fix_transcribed_text_chunked(text, theme, from_text)
+
+        self.log.debug(f"post-processing text: T={theme=}, M={from_text=}")
+
+        if not text.strip():
+            raise ValueError("no real text supplied for post-processing")
+
+        # TODO: Make alt prompt for non-transcript texts
+        user_prompt = POST_TEXT.format(text=text)
+
+        if theme:
+            user_prompt += "\n" + POST_TITLE.format(title=theme.strip())
+
+        messages = [
+            Message(Role.SYSTEM, POST_SYS),
+            Message(Role.USER, user_prompt),
+        ]
+
+        return await self.model.invoke_simple(messages)
+
     async def create_conspect_multi(
         self, texts: list[str], instructions: str | None = None
     ) -> str:
@@ -107,23 +133,22 @@ class TextPostProcessing:
         self.log.debug(f"outlining text(s)")
 
         if not texts:
-            return ValueError("no files supplied")
+            return ValueError("no texts supplied to outline")
 
-        contents = "\n".join(
-            map(lambda x: f"<file_contents>\n{x.strip()}\n</file_contents>", texts)
+        sys_prompt = CONSPECT_SYS_MAIN
+
+        if instructions.strip():
+            sys_prompt += "\n" + CONSPECT_SYS_INSTRUCT.format(
+                user_instructions=instructions
+            )
+
+        user_prompt = CONSPECT_TEXTS.format(
+            texts="\n".join(map(lambda x: f"<text>\n{x.strip()}\n</text>", texts))
         )
 
-        user_instructions = (
-            instructions if instructions else "No instructions provided."
-        )
+        messages = [Message(Role.SYSTEM, sys_prompt), Message(Role.USER, user_prompt)]
 
-        prompt = CONSPECT_SYSTEM_PROMPT.format(
-            contents=contents, user_instructions=user_instructions
-        )
-
-        return await self.model.invoke_simple(
-            [Message(Role.USER, prompt)], quality_mode=True
-        )
+        return await self.model.invoke_simple(messages, quality_mode=True)
 
     async def make_title(self, text: str) -> str:
         """Creates a title for input text"""
