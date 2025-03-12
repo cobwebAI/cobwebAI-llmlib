@@ -1,12 +1,16 @@
 import asyncio
 from cobwebai_lib.text import TextPostProcessing, Test, Question
 from uuid import UUID
+from openai import AsyncOpenAI
+from anthropic import AsyncAnthropic
+
+client = AsyncAnthropic()
 
 
 def test_text_fix():
     path = "assets/ai_lecture_3.m4a.txt"
     text = open(path, encoding="utf-8").read()
-    processor = TextPostProcessing()
+    processor = TextPostProcessing(client)
     output_text = asyncio.run(
         processor.fix_transcribed_text(text, theme="Лекция по машинному обучению")
     )
@@ -16,11 +20,13 @@ def test_text_fix():
 
 
 def test_conspect():
-    path = "assets/ai_lecture_3_fixed_chunk3072.txt"
+    path = "assets/ai_lecture_3.m4a.txt_fixed.txt"
     text = open(path, encoding="utf-8").read()
-    processor = TextPostProcessing()
+    processor = TextPostProcessing(client)
     output_text = asyncio.run(
-        processor.create_conspect_multi([text], instructions="Лекция по машинному обучению")
+        processor.create_conspect_multi(
+            [text], instructions="Лекция по машинному обучению"
+        )
     )
 
     output_title = asyncio.run(processor.make_title(output_text))
@@ -30,11 +36,13 @@ def test_conspect():
 
 
 def test_create_test():
-    path = "assets/ai_lecture_3_fixed_chunk3072.txt_conspect.txt"
+    path = "assets/ai_lecture_3.m4a.txt_fixed.txt"
     text = open(path, encoding="utf-8").read()
-    processor = TextPostProcessing()
+    processor = TextPostProcessing(client)
 
-    output: Test = asyncio.run(processor.make_test([text], "Не включай в тест вопросы про библиотеки."))
+    output: Test = asyncio.run(
+        processor.make_test([text], "Не включай в тест вопросы про библиотеки.")
+    )
     assert output != None
 
     print(output.test_name)
