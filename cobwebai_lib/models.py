@@ -120,13 +120,15 @@ class AnthModel(LanguageModel):
     ) -> str:
         sys_prompt, messages = self._strip_system(messages)
 
-        response = await self.client.messages.create(
+        response = None
+
+        async with self.client.messages.stream(
             max_tokens=self.MAX_TOKENS,
             messages=list(map(self._cast_msg, messages)),
             model=self.MODEL if not quality_mode else self.QUALITY_MODEL,
-            stream=True,
             system=sys_prompt if sys_prompt else NOT_GIVEN,
-        )
+        ) as stream:
+            response = stream.get_final_message()
 
         return response.content[0].text
 
@@ -139,11 +141,12 @@ class AnthModel(LanguageModel):
         sys_prompt, messages = self._strip_system(messages)
         sys_prompt += self.tool_use_reminder
 
-        response = await self.client.messages.create(
+        response = None
+
+        async with self.client.messages.stream(
             max_tokens=self.MAX_TOKENS,
             messages=list(map(self._cast_msg, messages)),
             model=self.MODEL if not quality_mode else self.QUALITY_MODEL,
-            stream=True,
             system=sys_prompt if sys_prompt else NOT_GIVEN,
             tool_choice={"type": "tool", "name": "send_result"},
             tools=[
@@ -153,6 +156,7 @@ class AnthModel(LanguageModel):
                     "input_schema": Schema.model_json_schema(),
                 }
             ],
-        )
+        ) as stream:
+            response = stream.get_final_message()
 
         return Schema(**response.content[1].input)
