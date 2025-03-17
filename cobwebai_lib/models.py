@@ -161,4 +161,4 @@ class AnthModel(LanguageModel):
         ) as stream:
             response = await stream.get_final_message()
 
-        return Schema(**response.content[1].input)
+        return Schema(**response.content[0].input)
